@@ -1,3 +1,108 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>Cotizador ICOPOR PRO</title>
+
+<style>
+body{
+    font-family:Arial;
+    background:#f4f6f9;
+    padding:30px;
+}
+.container{
+    display:flex;
+    gap:30px;
+}
+.card{
+    background:white;
+    padding:20px;
+    border-radius:10px;
+    width:100%;
+    box-shadow:0 4px 10px rgba(0,0,0,0.08);
+}
+textarea{
+    width:100%;
+    height:150px;
+}
+button{
+    padding:10px 20px;
+    border:none;
+    border-radius:6px;
+    cursor:pointer;
+    margin-top:10px;
+}
+.blue{background:#2563eb;color:white;}
+.green{background:#16a34a;color:white;}
+table{
+    width:100%;
+    border-collapse:collapse;
+    margin-top:15px;
+}
+th,td{
+    border:1px solid #ddd;
+    padding:8px;
+    text-align:center;
+}
+th{
+    background:#eee;
+}
+.totalBox{
+    margin-top:15px;
+    text-align:right;
+    font-size:18px;
+}
+</style>
+</head>
+
+<body>
+
+<h2>ICOPOR — Cotizador m³</h2>
+
+<div class="container">
+
+<div class="card">
+<h3>1) Texto OCR</h3>
+<textarea id="ocrText" placeholder="Ejemplo:
+2-250*280
+1 142*228"></textarea>
+<button id="btnGenerateTable" class="green">Generar Tabla</button>
+</div>
+
+<div class="card">
+<h3>2) Datos Cotización</h3>
+
+<label>Precio por m³</label>
+<input id="precioM3" type="text" value="300000"><br><br>
+
+<label>Altura (cm) — aplica a todas</label>
+<input id="altura" type="number" value="5"><br><br>
+
+<label>IVA (%)</label>
+<input id="iva" type="number" value="19"><br>
+
+<table id="cotTable">
+<thead>
+<tr>
+<th>Cant</th>
+<th>Largo (cm)</th>
+<th>Ancho (cm)</th>
+<th>m³</th>
+<th>Total Línea</th>
+</tr>
+</thead>
+<tbody></tbody>
+</table>
+
+<div class="totalBox">
+Subtotal: <span id="subtotal">$0</span><br>
+IVA: <span id="ivaAmt">$0</span><br>
+<strong>Total: <span id="totalAmt">$0</span></strong>
+</div>
+
+</div>
+</div>
+
 <script>
 
 const $ = id => document.getElementById(id);
@@ -30,18 +135,12 @@ function extraerLineas(texto){
     l = l.trim();
     if(!l) return;
 
-    // Captura:
-    // 2-250*280
-    // 2 250*280
-    // 250*280
     const match = l.match(/^(\d+)?\s*[- ]?\s*(\d+)\s*[xX\*]\s*(\d+)/);
 
     if(match){
-
       let cantidad = match[1] ? parseInt(match[1]) : 1;
       let largo    = parseInt(match[2]);
       let ancho    = parseInt(match[3]);
-
       resultado.push({cantidad,largo,ancho});
     }
 
@@ -51,14 +150,12 @@ function extraerLineas(texto){
 }
 
 function limpiarTabla(){
-  document.querySelector('#cotTable tbody').innerHTML="";
-  recalcularTotales();
+  $('cotTable').querySelector('tbody').innerHTML="";
 }
 
 function agregarFila(obj){
 
-  const tbody = document.querySelector('#cotTable tbody');
-
+  const tbody = $('cotTable').querySelector('tbody');
   const tr = document.createElement('tr');
 
   tr.innerHTML=`
@@ -125,10 +222,10 @@ function recalcularTotales(){
 
 $('btnGenerateTable').addEventListener('click',()=>{
 
+  limpiarTabla();
+
   const texto = $('ocrText').value;
   const data = extraerLineas(texto);
-
-  limpiarTabla();
 
   data.forEach(d=>agregarFila(d));
 
@@ -144,3 +241,6 @@ $('altura').addEventListener('input',()=>{
 $('iva').addEventListener('input',recalcularTotales);
 
 </script>
+
+</body>
+</html>
