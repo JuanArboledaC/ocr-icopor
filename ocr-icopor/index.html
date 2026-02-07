@@ -2,243 +2,289 @@
 <html lang="es">
 <head>
 <meta charset="UTF-8">
-<title>Cotizador ICOPOR PRO</title>
+<title>ICOPOR — Cotizador m³</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 
 <style>
 body{
-    font-family:Arial;
-    background:#f4f6f9;
-    padding:30px;
+font-family: Arial, sans-serif;
+background:#f3f4f6;
+margin:0;
+padding:30px;
 }
+
+h1{
+margin-bottom:25px;
+}
+
 .container{
-    display:flex;
-    gap:30px;
+display:flex;
+gap:30px;
+flex-wrap:wrap;
 }
+
 .card{
-    background:white;
-    padding:20px;
-    border-radius:10px;
-    width:100%;
-    box-shadow:0 4px 10px rgba(0,0,0,0.08);
+background:white;
+padding:20px;
+border-radius:12px;
+box-shadow:0 4px 15px rgba(0,0,0,0.05);
+flex:1;
+min-width:320px;
 }
+
 textarea{
-    width:100%;
-    height:150px;
+width:100%;
+height:140px;
+padding:10px;
+font-family:monospace;
 }
+
+input{
+padding:6px;
+margin:6px 0;
+}
+
 button{
-    padding:10px 20px;
-    border:none;
-    border-radius:6px;
-    cursor:pointer;
-    margin-top:10px;
+padding:10px 18px;
+border:none;
+border-radius:6px;
+cursor:pointer;
+color:white;
+margin-top:8px;
 }
-.blue{background:#2563eb;color:white;}
-.green{background:#16a34a;color:white;}
+
+.blue{background:#2563eb;}
+.green{background:#16a34a;}
+.red{background:#dc2626;}
+
 table{
-    width:100%;
-    border-collapse:collapse;
-    margin-top:15px;
+width:100%;
+border-collapse:collapse;
+margin-top:15px;
 }
+
 th,td{
-    border:1px solid #ddd;
-    padding:8px;
-    text-align:center;
+border:1px solid #ddd;
+padding:8px;
+text-align:center;
 }
+
 th{
-    background:#eee;
+background:#f1f5f9;
 }
-.totalBox{
-    margin-top:15px;
-    text-align:right;
-    font-size:18px;
+
+.totales{
+text-align:right;
+margin-top:15px;
+font-size:16px;
+}
+
+.total-final{
+font-weight:bold;
+font-size:18px;
 }
 </style>
 </head>
 
 <body>
 
-<h2>ICOPOR — Cotizador m³</h2>
+<h1>ICOPOR — Cotizador m³</h1>
 
 <div class="container">
 
 <div class="card">
-<h3>1) Texto OCR</h3>
-<textarea id="ocrText" placeholder="Ejemplo:
-2-250*280
-1 142*228"></textarea>
-<button id="btnGenerateTable" class="green">Generar Tabla</button>
+<h3>1) Subir Imagen (OCR)</h3>
+
+<input type="file" id="imageInput" accept="image/*">
+<br>
+<img id="preview" style="max-width:100%;margin-top:10px;display:none;">
+<br>
+
+<button class="blue" onclick="leerImagen()">Leer Imagen</button>
+
+<h4>Texto detectado (editable)</h4>
+<textarea id="texto"></textarea>
+
+<button class="green" onclick="generarTabla()">Generar Tabla</button>
+
 </div>
 
 <div class="card">
 <h3>2) Datos Cotización</h3>
 
-<label>Precio por m³</label>
-<input id="precioM3" type="text" value="300000"><br><br>
+<label>Cliente:</label><br>
+<input type="text" id="cliente"><br>
 
-<label>Altura (cm) — aplica a todas</label>
-<input id="altura" type="number" value="5"><br><br>
+<label>Precio por m³:</label><br>
+<input type="text" id="precio" value="300000"><br>
 
-<label>IVA (%)</label>
-<input id="iva" type="number" value="19"><br>
+<label>Altura (cm) — aplica a todas:</label><br>
+<input type="number" id="altura" value="30"><br>
 
-<table id="cotTable">
+<label>IVA (%):</label><br>
+<input type="number" id="iva" value="19"><br>
+
+<h4 id="numeroCotizacion"></h4>
+
+<table>
 <thead>
 <tr>
 <th>Cant</th>
 <th>Largo (cm)</th>
 <th>Ancho (cm)</th>
+<th>Altura (cm)</th>
 <th>m³</th>
 <th>Total Línea</th>
 </tr>
 </thead>
-<tbody></tbody>
+<tbody id="tablaBody"></tbody>
 </table>
 
-<div class="totalBox">
-Subtotal: <span id="subtotal">$0</span><br>
-IVA: <span id="ivaAmt">$0</span><br>
-<strong>Total: <span id="totalAmt">$0</span></strong>
+<div class="totales">
+<div id="subtotal">Subtotal: $ 0</div>
+<div id="ivaValor">IVA: $ 0</div>
+<div class="total-final" id="totalFinal">Total: $ 0</div>
 </div>
+
+<button class="blue" onclick="generarPDF()">Generar PDF</button>
 
 </div>
 </div>
 
 <script>
 
-const $ = id => document.getElementById(id);
+let base64Image = "";
+let numero = localStorage.getItem("cotNumero") || 1;
+document.getElementById("numeroCotizacion").innerText =
+"N° Cotización: " + String(numero).padStart(3,"0");
 
-function formatMoney(v){
-  return new Intl.NumberFormat('es-CO',{
-    style:'currency',
-    currency:'COP',
-    minimumFractionDigits:0
-  }).format(v);
+// PREVIEW IMAGEN
+document.getElementById("imageInput").addEventListener("change",function(e){
+const file = e.target.files[0];
+if(!file) return;
+const reader = new FileReader();
+reader.onload = function(){
+document.getElementById("preview").src = reader.result;
+document.getElementById("preview").style.display="block";
+base64Image = reader.result.split(",")[1];
 }
-
-function parsePrice(){
-  let v = $('precioM3').value || "0";
-  v = v.replace(/\./g,'').replace(/,/g,'');
-  return parseFloat(v) || 0;
-}
-
-$('precioM3').addEventListener('blur',()=>{
-  $('precioM3').value =
-    new Intl.NumberFormat('es-CO').format(parsePrice());
+reader.readAsDataURL(file);
 });
 
-function extraerLineas(texto){
+// OCR
+async function leerImagen(){
 
-  const lineas = texto.split(/\r?\n/);
-  const resultado = [];
+if(!base64Image){alert("Sube una imagen");return;}
 
-  lineas.forEach(l=>{
-    l = l.trim();
-    if(!l) return;
-
-    const match = l.match(/^(\d+)?\s*[- ]?\s*(\d+)\s*[xX\*]\s*(\d+)/);
-
-    if(match){
-      let cantidad = match[1] ? parseInt(match[1]) : 1;
-      let largo    = parseInt(match[2]);
-      let ancho    = parseInt(match[3]);
-      resultado.push({cantidad,largo,ancho});
-    }
-
-  });
-
-  return resultado;
-}
-
-function limpiarTabla(){
-  $('cotTable').querySelector('tbody').innerHTML="";
-}
-
-function agregarFila(obj){
-
-  const tbody = $('cotTable').querySelector('tbody');
-  const tr = document.createElement('tr');
-
-  tr.innerHTML=`
-    <td contenteditable class="cCant">${obj.cantidad}</td>
-    <td contenteditable class="cLargo">${obj.largo}</td>
-    <td contenteditable class="cAncho">${obj.ancho}</td>
-    <td class="cM3">0</td>
-    <td class="cTotal">$0</td>
-  `;
-
-  tbody.appendChild(tr);
-
-  tr.querySelectorAll('[contenteditable]').forEach(c=>{
-    c.addEventListener('input',()=>{
-      recalcularFila(tr);
-      recalcularTotales();
-    });
-  });
-
-  recalcularFila(tr);
-}
-
-function recalcularFila(tr){
-
-  const altura_cm = parseFloat($('altura').value)||0;
-  const precio = parsePrice();
-
-  const cant  = parseFloat(tr.querySelector('.cCant').innerText)||0;
-  const largo = parseFloat(tr.querySelector('.cLargo').innerText)||0;
-  const ancho = parseFloat(tr.querySelector('.cAncho').innerText)||0;
-
-  const m3 =
-    (largo/100) *
-    (ancho/100) *
-    (altura_cm/100) *
-    cant;
-
-  const total = m3 * precio;
-
-  tr.querySelector('.cM3').innerText =
-    m3.toFixed(4);
-
-  tr.querySelector('.cTotal').innerText =
-    formatMoney(Math.round(total));
-}
-
-function recalcularTotales(){
-
-  let subtotal = 0;
-
-  document.querySelectorAll('.cTotal').forEach(td=>{
-    const v = Number(td.innerText.replace(/[^0-9]/g,''))||0;
-    subtotal+=v;
-  });
-
-  const ivaPct = parseFloat($('iva').value)||0;
-  const iva = subtotal*(ivaPct/100);
-  const total = subtotal+iva;
-
-  $('subtotal').innerText = formatMoney(subtotal);
-  $('ivaAmt').innerText   = formatMoney(iva);
-  $('totalAmt').innerText = formatMoney(total);
-}
-
-$('btnGenerateTable').addEventListener('click',()=>{
-
-  limpiarTabla();
-
-  const texto = $('ocrText').value;
-  const data = extraerLineas(texto);
-
-  data.forEach(d=>agregarFila(d));
-
-  recalcularTotales();
+const response = await fetch("/.netlify/functions/vision",{
+method:"POST",
+headers:{"Content-Type":"application/json"},
+body:JSON.stringify({image:base64Image})
 });
 
-$('altura').addEventListener('input',()=>{
-  document.querySelectorAll('#cotTable tbody tr')
-  .forEach(tr=>recalcularFila(tr));
-  recalcularTotales();
+const data = await response.json();
+
+if(data.responses && data.responses[0].fullTextAnnotation){
+document.getElementById("texto").value =
+data.responses[0].fullTextAnnotation.text;
+}else{
+alert("No se detectó texto");
+}
+}
+
+// FORMATO DINERO
+function formato(valor){
+return valor.toLocaleString("es-CO",{minimumFractionDigits:0});
+}
+
+// GENERAR TABLA
+function generarTabla(){
+
+const texto = document.getElementById("texto").value;
+const precio = parseFloat(document.getElementById("precio").value.replace(/\./g,""));
+const altura = parseFloat(document.getElementById("altura").value);
+const ivaPorc = parseFloat(document.getElementById("iva").value);
+
+const lineas = texto.split("\n");
+const tbody = document.getElementById("tablaBody");
+tbody.innerHTML="";
+
+let subtotal=0;
+
+lineas.forEach(linea=>{
+if(!linea.trim()) return;
+
+let partes = linea.replace(/x/gi,"*").split("*");
+
+let cant=1,largo=0,ancho=0;
+
+if(linea.includes("-")){
+let temp = linea.split("-");
+cant=parseFloat(temp[0]);
+let dims=temp[1].split("*");
+largo=parseFloat(dims[0]);
+ancho=parseFloat(dims[1]);
+}else{
+largo=parseFloat(partes[0]);
+ancho=parseFloat(partes[1]);
+}
+
+if(isNaN(largo)||isNaN(ancho)) return;
+
+let m3 = (largo/100)*(ancho/100)*(altura/100)*cant;
+let totalLinea = m3 * precio;
+subtotal+=totalLinea;
+
+tbody.innerHTML+=`
+<tr>
+<td>${cant}</td>
+<td>${largo}</td>
+<td>${ancho}</td>
+<td>${altura}</td>
+<td>${m3.toFixed(3)}</td>
+<td>$ ${formato(Math.round(totalLinea))}</td>
+</tr>
+`;
+
 });
 
-$('iva').addEventListener('input',recalcularTotales);
+let ivaValor = subtotal * (ivaPorc/100);
+let totalFinal = subtotal + ivaValor;
+
+document.getElementById("subtotal").innerText="Subtotal: $ "+formato(Math.round(subtotal));
+document.getElementById("ivaValor").innerText="IVA: $ "+formato(Math.round(ivaValor));
+document.getElementById("totalFinal").innerText="Total: $ "+formato(Math.round(totalFinal));
+}
+
+// PDF
+function generarPDF(){
+
+const { jsPDF } = window.jspdf;
+const doc = new jsPDF();
+
+const cliente = document.getElementById("cliente").value || "Cliente";
+const total = document.getElementById("totalFinal").innerText;
+
+doc.setFontSize(16);
+doc.text("COTIZACIÓN ICOPOR",20,20);
+
+doc.setFontSize(12);
+doc.text("Cliente: "+cliente,20,35);
+doc.text(document.getElementById("numeroCotizacion").innerText,20,45);
+
+doc.text(total,20,60);
+
+let nombreArchivo =
+"COT-"+String(numero).padStart(3,"0")+" - "+cliente+".pdf";
+
+doc.save(nombreArchivo);
+
+numero++;
+localStorage.setItem("cotNumero",numero);
+location.reload();
+}
 
 </script>
 
