@@ -1,455 +1,146 @@
-<!doctype html>
-<html lang="es">
-<head>
-<meta charset="utf-8" />
-<meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>OCR → Cotización (ICOPOR)</title>
-<style>
-  :root{--card:#fff;--bg:#f4f6f9;--accent:#2563eb;--danger:#dc2626;--muted:#666}
-  body{font-family:Inter,Arial,Helvetica,sans-serif;background:var(--bg);margin:0;padding:28px;color:#111}
-  .wrap{max-width:1200px;margin:0 auto;display:grid;grid-template-columns:1fr 520px;gap:24px}
-  .card{background:var(--card);border-radius:10px;padding:20px;box-shadow:0 2px 8px rgba(0,0,0,.06)}
-  h2{margin:0 0 10px 0;font-size:18px}
-  label{display:block;font-size:13px;color:var(--muted);margin:8px 0 6px}
-  input[type=text], input[type=number], textarea, select{
-    width:100%;padding:8px 10px;border:1px solid #e3e7ee;border-radius:6px;box-sizing:border-box;
-  }
-  textarea{min-height:120px;font-family:monospace;white-space:pre-wrap}
-  button{padding:10px 14px;border-radius:8px;border:0;color:#fff;cursor:pointer;margin-right:8px}
-  .btn-primary{background:var(--accent)}
-  .btn-danger{background:var(--danger)}
-  .btn-ghost{background:#eee;color:#222}
-  .row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
-  #preview{max-width:100%;border-radius:6px;margin-top:10px;display:block}
-  .table-wrap{margin-top:16px;border-top:1px solid #eee;padding-top:12px}
-  table{width:100%;border-collapse:collapse}
-  th,td{padding:8px 10px;border:1px solid #e9eef5;text-align:center}
-  th{background:#f6f8fb}
-  td[contenteditable]{background:#fffbe8}
-  .totals{margin-top:12px;text-align:right}
-  .totals div{margin:6px 0}
-  .logo-preview{max-width:140px;border-radius:6px}
-  .small{font-size:12px;color:var(--muted)}
-  .muted{color:var(--muted)}
-</style>
-</head>
-<body>
-
-<div class="wrap">
-
-  <!-- LEFT: OCR -->
-  <div class="card">
-    <h2>1) OCR — Extraer medidas desde foto</h2>
-
-    <label>Seleccionar imagen</label>
-    <input type="file" id="imageInput" accept="image/*" />
-    <div style="margin-top:8px" class="row">
-      <button id="btnRead" class="btn-primary">Leer Imagen</button>
-      <button id="btnClearOCR" class="btn-ghost">Limpiar</button>
-      <button id="btnRemoveImage" class="btn-danger">Eliminar imagen</button>
-    </div>
-
-    <img id="preview" alt="" />
-
-    <label>Texto detectado (editable)</label>
-    <textarea id="ocrText" placeholder="Aquí aparecerá el texto resultante del OCR (editable)"></textarea>
-
-    <div style="margin-top:10px">
-      <button id="btnGenerateTable" class="btn-primary">Generar Tabla</button>
-      <span class="small muted" style="margin-left:8px">Si OCR falla, corrige el texto y pulsa Generar Tabla</span>
-    </div>
-  </div>
-
-  <!-- RIGHT: Cotización -->
-  <div class="card">
-    <h2>2) Datos Cotización</h2>
-
-    <label>Nombre del cliente</label>
-    <input id="cliente" type="text" placeholder="Nombre del cliente" />
-
-    <label>Precio por m³ (COP)</label>
-    <input id="precioM3" type="text" placeholder="300000" />
-
-    <label>Espesor (cm) — aplica a todas las líneas</label>
-    <input id="espesor" type="number" value="0.5" step="0.01" />
-
-    <label>IVA (%) — escribe 0 si no aplica</label>
-    <input id="iva" type="number" value="0" min="0" step="0.01" />
-
-    <label>Logo (opcional)</label>
-    <input id="logoInput" type="file" accept="image/*" />
-    <div style="margin-top:10px">
-      <img id="logoPreview" class="logo-preview" alt="" style="display:none" />
-    </div>
-
-    <!-- Tabla / resultados -->
-    <div class="table-wrap">
-      <table id="cotTable" >
-        <thead>
-          <tr>
-            <th>Cant</th>
-            <th>Ancho (cm)</th>
-            <th>Alto (cm)</th>
-            <th>m³</th>
-            <th>Total Línea (COP)</th>
-          </tr>
-        </thead>
-        <tbody></tbody>
-      </table>
-
-      <div class="totals">
-        <div>Subtotal: <span id="subtotal">$0</span></div>
-        <div>IVA: <span id="ivaAmt">$0</span></div>
-        <div style="font-weight:700">Total: <span id="totalAmt">$0</span></div>
-      </div>
-
-      <div style="margin-top:12px" class="row">
-        <button id="btnGeneratePDF" class="btn-primary">Generar PDF (imprimir)</button>
-        <button id="btnReset" class="btn-ghost">Reset tabla</button>
-      </div>
-
-      <p class="small muted" style="margin-top:8px">Nota: la tabla es editable. Cambia Cant/Ancho/Alto y se recalcula automáticamente.</p>
-    </div>
-  </div>
-
-</div>
-
 <script>
-/* --------------- helpers --------------- */
+
 const $ = id => document.getElementById(id);
-const formatMoney = v => new Intl.NumberFormat('es-CO',{style:'currency',currency:'COP',minimumFractionDigits:0}).format(v);
 
-/* --------------- preview & image handling --------------- */
-let base64Image = "";
-
-$('imageInput').addEventListener('change', (e)=>{
-  const f = e.target.files[0];
-  if(!f) return;
-  const r = new FileReader();
-  r.onload = () => {
-    $('preview').src = r.result;
-    $('preview').style.display = 'block';
-    base64Image = r.result.split(',')[1];
-  };
-  r.readAsDataURL(f);
-});
-
-$('btnRemoveImage').addEventListener('click', ()=>{
-  $('preview').src = '';
-  $('preview').style.display = 'none';
-  $('imageInput').value = '';
-  base64Image = '';
-  $('ocrText').value = '';
-});
-
-/* logo upload preview */
-$('logoInput').addEventListener('change', (e)=>{
-  const f = e.target.files[0];
-  if(!f) { $('logoPreview').style.display='none'; return; }
-  const r = new FileReader();
-  r.onload = () => {
-    $('logoPreview').src = r.result;
-    $('logoPreview').style.display = 'inline-block';
-  };
-  r.readAsDataURL(f);
-});
-
-/* --------------- call Netlify Vision function --------------- */
-$('btnRead').addEventListener('click', async ()=>{
-  if(!base64Image){
-    alert('Sube primero una imagen.');
-    return;
-  }
-  $('ocrText').value = 'Procesando con Google Vision...';
-  try {
-    const res = await fetch('/.netlify/functions/vision', {
-      method:'POST',
-      headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({ image: base64Image })
-    });
-    // si la función devuelve no-JSON o vacío, capturamos
-    const text = await res.text();
-    let parsed;
-    try { parsed = JSON.parse(text); } catch(e){
-      // si no es JSON => mostrar raw
-      $('ocrText').value = text || 'Respuesta vacía';
-      return;
-    }
-    if(parsed.responses && parsed.responses[0] && parsed.responses[0].fullTextAnnotation){
-      $('ocrText').value = parsed.responses[0].fullTextAnnotation.text;
-    } else {
-      // fallback: concatenar posibles textAnnotations
-      const ta = parsed.responses && parsed.responses[0] && parsed.responses[0].textAnnotations;
-      if(ta && ta.length) $('ocrText').value = ta[0].description;
-      else $('ocrText').value = JSON.stringify(parsed, null, 2);
-    }
-  } catch(err){
-    $('ocrText').value = 'Error al llamar función OCR: ' + (err.message||err);
-  }
-});
-
-/* clear OCR text */
-$('btnClearOCR').addEventListener('click', ()=>{
-  $('ocrText').value = '';
-});
-
-/* --------------- parse OCR text -> generate table --------------- */
-function extractMeasuresFromText(text){
-  // devuelve array de {qty, ancho, alto}
-  const results = [];
-  if(!text) return results;
-  const lines = text.split(/\r?\n/);
-  const rx = /(\d+)\s*[-=:\)]?\s*(\d{1,4})\s*[xX\*×]\s*(\d{1,4})/g;
-  // buscamos en cada línea matches múltiples
-  for(let ln of lines){
-    ln = ln.trim();
-    if(!ln) continue;
-    let m;
-    // alínea limpia: quitar letras innecesarias salvo números y separadores
-    // pero usamos el regex global para capturar varios matches por line
-    while((m = rx.exec(ln)) !== null){
-      // m[1] podría ser quantity or ancho depending on spacing.
-      // Si line comienza con qty seguido de separator, m[1] sería qty.
-      // Detectamos cantidad: si antes del match existe un número + separador
-      // Para simplificar: si la línea empieza por "<qty>-" o "<qty> =" o "<qty> " detectamos qty
-      let qtyCandidate = null;
-      const prefix = ln.slice(0, m.index).trim();
-      const before = ln.substring(0, m.index+ m[0].length);
-      // if prefix contains a small number and a non-digit just before match
-      const qmatch = prefix.match(/(^|\s)(\d{1,3})\s*[-=:\)]?\s*$/);
-      if(qmatch) qtyCandidate = parseInt(qmatch[2],10);
-
-      // otherwise if the match itself probably gives: m[1] = first number.
-      // decide:
-      let qty = qtyCandidate || 1;
-      // If qtyCandidate null and the match is like "2-250x280" it's captured as m[1]=2,m[2]=250,m[3]=280
-      // If line has form "250 x 280" then m[1]=250 -> assume qty=1
-      if(qtyCandidate == null){
-        // try to detect if the part before x is very small and likely a qty
-        // But safe fallback: if prefix empty and m[1] <= 10 treat as qty
-        if(prefix=='' && parseInt(m[1],10) <= 10){
-          // Could be qty; but we need to decide mapping:
-          // If prefix empty and we matched 2 x 250? Rare. We'll assume m[1] is qty only when pattern originally matched qty-first forms.
-          // To be safe: if ln starts with m[1] + non-digit + then width appears later, but we already matched.
-          // We'll attempt: if ln.startsWith(m[1]) and ln.match(/^(\d+)\s*[-=:\)]\s*\d+[xX]/) then m[1] is qty.
-          if(/^\d+\s*[-=:\)]\s*\d+\s*[xX\*]/.test(ln)){
-            qty = parseInt(m[1],10);
-            // then ancho= m[2], alto= m[3]
-            const ancho = parseInt(m[2],10);
-            const alto = parseInt(m[3],10);
-            results.push({qty, ancho, alto});
-            continue;
-          } else {
-            qty = 1;
-          }
-        } else {
-          qty = 1;
-        }
-      }
-
-      // now decide ancho & alto indices:
-      // If qtyCandidate present, then ancho = m[2], alto = m[3]
-      let ancho = parseInt(m[2],10);
-      let alto  = parseInt(m[3],10);
-
-      // If qtyCandidate not present but the matched first number improbable as ancho (e.g. m[1] <= 10),
-      // try to interpret as qty.
-      if(qtyCandidate==null && parseInt(m[1],10) <= 10 && parseInt(m[2],10) > 50){
-        qty = parseInt(m[1],10);
-        ancho = parseInt(m[2],10);
-        alto = parseInt(m[3],10);
-      } else if(qtyCandidate==null && parseInt(m[1],10) > 50){
-        // likely m[1] is ancho, so qty=1, ancho=m[1], alto=m[2]
-        qty = 1;
-        ancho = parseInt(m[1],10);
-        alto  = parseInt(m[2],10);
-      }
-
-      // sanity: ancho and alto must be positive
-      if(Number.isFinite(ancho) && Number.isFinite(alto)){
-        results.push({qty: Number(qty), ancho: Number(ancho), alto: Number(alto)});
-      }
-    } // while rx
-    rx.lastIndex = 0; // reset for next line
-  } // lines
-
-  return results;
+function formatMoney(v){
+  return new Intl.NumberFormat('es-CO',{
+    style:'currency',
+    currency:'COP',
+    minimumFractionDigits:0
+  }).format(v);
 }
 
-/* --------------- populate table --------------- */
-function clearTable(){
-  const tbody = document.querySelector('#cotTable tbody');
-  tbody.innerHTML = '';
-  recalcTotals();
+function parsePrice(){
+  let v = $('precioM3').value || "0";
+  v = v.replace(/\./g,'').replace(/,/g,'');
+  return parseFloat(v) || 0;
 }
 
-function addRow({qty=1,ancho=0,alto=0}){
+$('precioM3').addEventListener('blur',()=>{
+  $('precioM3').value =
+    new Intl.NumberFormat('es-CO').format(parsePrice());
+});
+
+function extraerLineas(texto){
+
+  const lineas = texto.split(/\r?\n/);
+  const resultado = [];
+
+  lineas.forEach(l=>{
+    l = l.trim();
+    if(!l) return;
+
+    // Captura:
+    // 2-250*280
+    // 2 250*280
+    // 250*280
+    const match = l.match(/^(\d+)?\s*[- ]?\s*(\d+)\s*[xX\*]\s*(\d+)/);
+
+    if(match){
+
+      let cantidad = match[1] ? parseInt(match[1]) : 1;
+      let largo    = parseInt(match[2]);
+      let ancho    = parseInt(match[3]);
+
+      resultado.push({cantidad,largo,ancho});
+    }
+
+  });
+
+  return resultado;
+}
+
+function limpiarTabla(){
+  document.querySelector('#cotTable tbody').innerHTML="";
+  recalcularTotales();
+}
+
+function agregarFila(obj){
+
   const tbody = document.querySelector('#cotTable tbody');
+
   const tr = document.createElement('tr');
-  tr.innerHTML = `
-    <td contenteditable="true" class="cellQty">${qty}</td>
-    <td contenteditable="true" class="cellAncho">${ancho}</td>
-    <td contenteditable="true" class="cellAlto">${alto}</td>
-    <td class="cellM3">0</td>
-    <td class="cellTotal">$0</td>
+
+  tr.innerHTML=`
+    <td contenteditable class="cCant">${obj.cantidad}</td>
+    <td contenteditable class="cLargo">${obj.largo}</td>
+    <td contenteditable class="cAncho">${obj.ancho}</td>
+    <td class="cM3">0</td>
+    <td class="cTotal">$0</td>
   `;
+
   tbody.appendChild(tr);
 
-  // add listeners to editable cells to recalc on input
-  ['cellQty','cellAncho','cellAlto'].forEach(cls=>{
-    tr.querySelector('.'+cls).addEventListener('input', ()=>{
-      recalcRow(tr);
-      recalcTotals();
+  tr.querySelectorAll('[contenteditable]').forEach(c=>{
+    c.addEventListener('input',()=>{
+      recalcularFila(tr);
+      recalcularTotales();
     });
   });
 
-  // recalc row initially
-  recalcRow(tr);
-  recalcTotals();
+  recalcularFila(tr);
 }
 
-function recalcRow(tr){
-  const precio = parsePriceInput();
-  const espesor_cm = parseFloat($('espesor').value) || 0;
-  const qty = parseFloat(tr.querySelector('.cellQty').innerText.replace(/\./g,'')) || 0;
-  const ancho_cm = parseFloat(tr.querySelector('.cellAncho').innerText.replace(/\./g,'')) || 0;
-  const alto_cm = parseFloat(tr.querySelector('.cellAlto').innerText.replace(/\./g,'')) || 0;
+function recalcularFila(tr){
 
-  // convierte cm -> m
-  const ancho_m = ancho_cm/100;
-  const alto_m  = alto_cm/100;
-  const espesor_m = espesor_cm/100;
+  const altura_cm = parseFloat($('altura').value)||0;
+  const precio = parsePrice();
 
-  // volumen (m3) por pieza = ancho_m * alto_m * espesor_m
-  const volumen_m3_por = ancho_m * alto_m * espesor_m;
-  const m3_total = volumen_m3_por * qty;
+  const cant  = parseFloat(tr.querySelector('.cCant').innerText)||0;
+  const largo = parseFloat(tr.querySelector('.cLargo').innerText)||0;
+  const ancho = parseFloat(tr.querySelector('.cAncho').innerText)||0;
 
-  const lineTotal = m3_total * precio;
+  const m3 =
+    (largo/100) *
+    (ancho/100) *
+    (altura_cm/100) *
+    cant;
 
-  tr.querySelector('.cellM3').innerText = (Number.isFinite(m3_total) ? m3_total.toFixed(3) : '0.000');
-  tr.querySelector('.cellTotal').innerText = (Number.isFinite(lineTotal) ? formatMoney(Math.round(lineTotal)) : formatMoney(0));
+  const total = m3 * precio;
+
+  tr.querySelector('.cM3').innerText =
+    m3.toFixed(4);
+
+  tr.querySelector('.cTotal').innerText =
+    formatMoney(Math.round(total));
 }
 
-/* --------------- totals --------------- */
-function recalcTotals(){
-  const precio = parsePriceInput();
-  const ivaPct = parseFloat($('iva').value) || 0;
-  const tbody = document.querySelectorAll('#cotTable tbody tr');
+function recalcularTotales(){
+
   let subtotal = 0;
-  tbody.forEach(tr=>{
-    const txt = tr.querySelector('.cellTotal').innerText || '';
-    const val = Number(String(txt).replace(/[^0-9\-]+/g,'')) || 0;
-    subtotal += val;
+
+  document.querySelectorAll('.cTotal').forEach(td=>{
+    const v = Number(td.innerText.replace(/[^0-9]/g,''))||0;
+    subtotal+=v;
   });
-  const ivaAmt = Math.round(subtotal * (ivaPct/100));
-  const total = Math.round(subtotal + ivaAmt);
+
+  const ivaPct = parseFloat($('iva').value)||0;
+  const iva = subtotal*(ivaPct/100);
+  const total = subtotal+iva;
 
   $('subtotal').innerText = formatMoney(subtotal);
-  $('ivaAmt').innerText = formatMoney(ivaAmt);
+  $('ivaAmt').innerText   = formatMoney(iva);
   $('totalAmt').innerText = formatMoney(total);
 }
 
-/* formatting / parsing price field */
-function parsePriceInput(){
-  let v = $('precioM3').value || '';
-  v = String(v).replace(/\./g,'').replace(/,/g,'');
-  const p = parseFloat(v) || 0;
-  return p;
-}
-$('precioM3').addEventListener('blur', ()=>{
-  const p = parsePriceInput();
-  $('precioM3').value = new Intl.NumberFormat('es-CO').format(p);
+$('btnGenerateTable').addEventListener('click',()=>{
+
+  const texto = $('ocrText').value;
+  const data = extraerLineas(texto);
+
+  limpiarTabla();
+
+  data.forEach(d=>agregarFila(d));
+
+  recalcularTotales();
 });
 
-/* --------------- generate table from OCR text --------------- */
-$('btnGenerateTable').addEventListener('click', ()=>{
-  const txt = $('ocrText').value || '';
-  const parsed = extractMeasuresFromText(txt);
-
-  clearTable();
-  if(parsed.length === 0){
-    alert('No se encontraron medidas con el formato esperado. Revisa el texto OCR y corrige manualmente, luego pulsa Generar Tabla de nuevo.');
-    return;
-  }
-  parsed.forEach(item => addRow(item));
+$('altura').addEventListener('input',()=>{
+  document.querySelectorAll('#cotTable tbody tr')
+  .forEach(tr=>recalcularFila(tr));
+  recalcularTotales();
 });
 
-/* --------------- recalc when IVA or espesor change --------------- */
-$('iva').addEventListener('input', recalcTotals);
-$('espesor').addEventListener('input', ()=>{ document.querySelectorAll('#cotTable tbody tr').forEach(recalcRow); recalcTotals(); });
-
-/* --------------- Reset table button --------------- */
-$('btnReset').addEventListener('click', ()=>{
-  if(!confirm('Resetear tabla y totales?')) return;
-  clearTable();
-});
-
-/* --------------- Generate PDF (simple) --------------- */
-$('btnGeneratePDF').addEventListener('click', ()=>{
-  // build printable HTML
-  const cliente = $('cliente').value || '';
-  const logoSrc = $('logoPreview').src || '';
-  const date = new Date().toLocaleString();
-  const tbodyRows = Array.from(document.querySelectorAll('#cotTable tbody tr')).map(tr=>{
-    return {
-      qty: tr.querySelector('.cellQty').innerText,
-      ancho: tr.querySelector('.cellAncho').innerText,
-      alto: tr.querySelector('.cellAlto').innerText,
-      m3: tr.querySelector('.cellM3').innerText,
-      total: tr.querySelector('.cellTotal').innerText
-    };
-  });
-
-  let html = `
-    <html><head><meta charset="utf-8"><title>Cotizacion</title>
-    <style>
-      body{font-family:Arial,Helvetica,sans-serif;padding:20px;color:#111}
-      .header{display:flex;justify-content:space-between;align-items:center}
-      .logo{max-width:160px}
-      table{width:100%;border-collapse:collapse;margin-top:12px}
-      th,td{border:1px solid #ddd;padding:8px;text-align:center}
-      th{background:#f6f6f6}
-      .right{text-align:right}
-    </style>
-    </head><body>
-    <div class="header">
-      <div>
-        <h2>Cotización</h2>
-        <div><strong>Cliente:</strong> ${escapeHtml(cliente)}</div>
-        <div><strong>Fecha:</strong> ${escapeHtml(date)}</div>
-      </div>
-      <div>${ logoSrc ? `<img class="logo" src="${logoSrc}" />` : ''}</div>
-    </div>
-    <table><thead>
-      <tr><th>Cant</th><th>Ancho (cm)</th><th>Alto (cm)</th><th>m³</th><th>Total Línea</th></tr>
-    </thead><tbody>`;
-
-  tbodyRows.forEach(r=>{
-    html += `<tr><td>${escapeHtml(r.qty)}</td><td>${escapeHtml(r.ancho)}</td><td>${escapeHtml(r.alto)}</td><td>${escapeHtml(r.m3)}</td><td>${escapeHtml(r.total)}</td></tr>`;
-  });
-
-  html += `</tbody></table>
-    <div style="margin-top:12px;text-align:right">
-      <div>Subtotal: ${$('subtotal').innerText}</div>
-      <div>IVA: ${$('ivaAmt').innerText}</div>
-      <div style="font-weight:700">Total: ${$('totalAmt').innerText}</div>
-    </div>
-    </body></html>`;
-
-  const w = window.open('', '_blank');
-  w.document.write(html);
-  w.document.close();
-  w.focus();
-  // delay to ensure content loaded then print
-  setTimeout(()=>{ w.print(); }, 600);
-});
-
-/* escape helper */
-function escapeHtml(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
-
-/* --------------- initial state --------------- */
-clearTable();
+$('iva').addEventListener('input',recalcularTotales);
 
 </script>
-</body>
-</html>
