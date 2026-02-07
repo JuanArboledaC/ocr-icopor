@@ -1,292 +1,362 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="es">
 <head>
-<meta charset="UTF-8">
-<title>ICOPOR — Cotizador m³</title>
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>ICOPOR — Cotizador m³ (OCR + PDF)</title>
 
+<!-- jsPDF + AutoTable -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.25/jspdf.plugin.autotable.min.js"></script>
 
 <style>
-body{
-font-family: Arial, sans-serif;
-background:#f3f4f6;
-margin:0;
-padding:30px;
-}
-
-h1{
-margin-bottom:25px;
-}
-
-.container{
-display:flex;
-gap:30px;
-flex-wrap:wrap;
-}
-
-.card{
-background:white;
-padding:20px;
-border-radius:12px;
-box-shadow:0 4px 15px rgba(0,0,0,0.05);
-flex:1;
-min-width:320px;
-}
-
-textarea{
-width:100%;
-height:140px;
-padding:10px;
-font-family:monospace;
-}
-
-input{
-padding:6px;
-margin:6px 0;
-}
-
-button{
-padding:10px 18px;
-border:none;
-border-radius:6px;
-cursor:pointer;
-color:white;
-margin-top:8px;
-}
-
-.blue{background:#2563eb;}
-.green{background:#16a34a;}
-.red{background:#dc2626;}
-
-table{
-width:100%;
-border-collapse:collapse;
-margin-top:15px;
-}
-
-th,td{
-border:1px solid #ddd;
-padding:8px;
-text-align:center;
-}
-
-th{
-background:#f1f5f9;
-}
-
-.totales{
-text-align:right;
-margin-top:15px;
-font-size:16px;
-}
-
-.total-final{
-font-weight:bold;
-font-size:18px;
-}
+  body{font-family:Arial,Helvetica,sans-serif;background:#f3f4f6;margin:24px;}
+  h1{margin:0 0 18px 0}
+  .row{display:flex;gap:20px;flex-wrap:wrap}
+  .card{background:#fff;padding:18px;border-radius:10px;box-shadow:0 6px 18px rgba(0,0,0,0.06);flex:1;min-width:320px}
+  input, textarea, select {width:100%;padding:8px;margin:8px 0;border:1px solid #ddd;border-radius:6px}
+  textarea{height:160px;font-family:monospace}
+  img#preview{max-width:100%;border-radius:6px;margin-top:8px;display:none}
+  table{width:100%;border-collapse:collapse;margin-top:12px}
+  th,td{border:1px solid #e6e6e6;padding:8px;text-align:center}
+  th{background:#fafafa}
+  .btn{display:inline-block;padding:10px 14px;border-radius:8px;border:none;color:#fff;cursor:pointer;margin-top:6px}
+  .btn-blue{background:#1d4ed8}
+  .btn-green{background:#059669}
+  .btn-red{background:#dc2626}
+  .totals{margin-top:12px;text-align:right}
+  .total-strong{font-weight:700;font-size:18px}
 </style>
 </head>
-
 <body>
+<h1>ICOPOR — Cotizador m³ (OCR → Cotización PDF)</h1>
 
-<h1>ICOPOR — Cotizador m³</h1>
+<div class="row">
+  <div class="card">
+    <h3>1) Subir imagen y extraer texto (OCR)</h3>
 
-<div class="container">
+    <label>Imagen (foto / escaneo)</label>
+    <input type="file" id="imageInput" accept="image/*">
 
-<div class="card">
-<h3>1) Subir Imagen (OCR)</h3>
+    <img id="preview" alt="preview">
 
-<input type="file" id="imageInput" accept="image/*">
-<br>
-<img id="preview" style="max-width:100%;margin-top:10px;display:none;">
-<br>
+    <div style="margin-top:8px">
+      <button class="btn btn-blue" onclick="leerImagen()">Leer Imagen (Vision)</button>
+      <button class="btn btn-red" onclick="limpiarOCR()">Limpiar</button>
+    </div>
 
-<button class="blue" onclick="leerImagen()">Leer Imagen</button>
+    <h4>Texto detectado (editable)</h4>
+    <textarea id="texto" placeholder="Ejemplo:
+2-250*280
+3-150x370
+1 142*228"></textarea>
 
-<h4>Texto detectado (editable)</h4>
-<textarea id="texto"></textarea>
+    <div>
+      <button class="btn btn-green" onclick="generarTabla()">Generar Tabla</button>
+    </div>
+  </div>
 
-<button class="green" onclick="generarTabla()">Generar Tabla</button>
+  <div class="card">
+    <h3>2) Datos de la cotización</h3>
 
-</div>
+    <label>Cliente</label>
+    <input id="cliente" placeholder="Nombre del cliente">
 
-<div class="card">
-<h3>2) Datos Cotización</h3>
+    <label>Precio por m³ (COP) — acepta 300000 o 300.000</label>
+    <input id="precio" value="300000">
 
-<label>Cliente:</label><br>
-<input type="text" id="cliente"><br>
+    <label>Altura (cm) — se aplica a todas las líneas</label>
+    <input id="altura" type="number" value="30">
 
-<label>Precio por m³:</label><br>
-<input type="text" id="precio" value="300000"><br>
+    <label>IVA (%)</label>
+    <input id="iva" type="number" value="19">
 
-<label>Altura (cm) — aplica a todas:</label><br>
-<input type="number" id="altura" value="30"><br>
+    <label>Logo (opcional) — se incluye en PDF</label>
+    <input id="logoInput" type="file" accept="image/*">
 
-<label>IVA (%):</label><br>
-<input type="number" id="iva" value="19"><br>
+    <div style="margin-top:12px">
+      <strong id="numeroCot">N° Cotización: 000</strong>
+    </div>
 
-<h4 id="numeroCotizacion"></h4>
+    <h4 style="margin-top:12px">Tabla (generada)</h4>
+    <table>
+      <thead>
+        <tr><th>Cant</th><th>Largo (cm)</th><th>Ancho (cm)</th><th>Altura (cm)</th><th>m³</th><th>Total Línea (COP)</th></tr>
+      </thead>
+      <tbody id="tablaBody"></tbody>
+    </table>
 
-<table>
-<thead>
-<tr>
-<th>Cant</th>
-<th>Largo (cm)</th>
-<th>Ancho (cm)</th>
-<th>Altura (cm)</th>
-<th>m³</th>
-<th>Total Línea</th>
-</tr>
-</thead>
-<tbody id="tablaBody"></tbody>
-</table>
+    <div class="totals">
+      <div id="subtotal">Subtotal: $ 0</div>
+      <div id="ivaValor">IVA: $ 0</div>
+      <div class="total-strong" id="totalFinal">Total: $ 0</div>
+    </div>
 
-<div class="totales">
-<div id="subtotal">Subtotal: $ 0</div>
-<div id="ivaValor">IVA: $ 0</div>
-<div class="total-final" id="totalFinal">Total: $ 0</div>
-</div>
-
-<button class="blue" onclick="generarPDF()">Generar PDF</button>
-
-</div>
+    <div style="margin-top:12px">
+      <button class="btn btn-blue" onclick="generarPDF()">Generar PDF</button>
+    </div>
+  </div>
 </div>
 
 <script>
-
+/* -------------------------
+   Variables / helpers
+   ------------------------- */
 let base64Image = "";
-let numero = localStorage.getItem("cotNumero") || 1;
-document.getElementById("numeroCotizacion").innerText =
-"N° Cotización: " + String(numero).padStart(3,"0");
+let base64Logo = "";
+let cotNumero = parseInt(localStorage.getItem("cot_num") || "1",10);
+function actualizarNumeroUI(){ document.getElementById("numeroCot").innerText = "N° Cotización: " + String(cotNumero).padStart(3,"0"); }
+actualizarNumeroUI();
 
-// PREVIEW IMAGEN
-document.getElementById("imageInput").addEventListener("change",function(e){
-const file = e.target.files[0];
-if(!file) return;
-const reader = new FileReader();
-reader.onload = function(){
-document.getElementById("preview").src = reader.result;
-document.getElementById("preview").style.display="block";
-base64Image = reader.result.split(",")[1];
+function fmt(n){ // formato moneda COP sin decimales
+  if(isNaN(n)) n=0;
+  return n.toLocaleString('es-CO',{maximumFractionDigits:0});
 }
-reader.readAsDataURL(file);
+function safeParsePrice(str){
+  if(typeof str !== "string") str = String(str||"");
+  // quitar puntos, espacios, comas
+  str = str.replace(/\./g,"").replace(/,/g,"").replace(/\s/g,"");
+  const p = parseFloat(str);
+  return isNaN(p)?0:p;
+}
+
+/* -------------------------
+   Preview + logo uploads
+   ------------------------- */
+document.getElementById("imageInput").addEventListener("change", function(e){
+  const f = e.target.files[0];
+  if(!f) return;
+  const r = new FileReader();
+  r.onload = ()=> {
+    const src = r.result;
+    document.getElementById("preview").src = src;
+    document.getElementById("preview").style.display = "block";
+    base64Image = src.split(",")[1];
+  };
+  r.readAsDataURL(f);
+});
+document.getElementById("logoInput").addEventListener("change", function(e){
+  const f = e.target.files[0];
+  if(!f) return;
+  const r = new FileReader();
+  r.onload = ()=> {
+    base64Logo = r.result.split(",")[1]; // mantener sin header
+  };
+  r.readAsDataURL(f);
 });
 
-// OCR
+/* -------------------------
+   OCR fetch (Netlify function)
+   ------------------------- */
 async function leerImagen(){
-
-if(!base64Image){alert("Sube una imagen");return;}
-
-const response = await fetch("/.netlify/functions/vision",{
-method:"POST",
-headers:{"Content-Type":"application/json"},
-body:JSON.stringify({image:base64Image})
-});
-
-const data = await response.json();
-
-if(data.responses && data.responses[0].fullTextAnnotation){
-document.getElementById("texto").value =
-data.responses[0].fullTextAnnotation.text;
-}else{
-alert("No se detectó texto");
-}
-}
-
-// FORMATO DINERO
-function formato(valor){
-return valor.toLocaleString("es-CO",{minimumFractionDigits:0});
+  if(!base64Image){ alert("Sube una imagen primero."); return; }
+  document.getElementById("texto").value = "Procesando...";
+  try{
+    const resp = await fetch("/.netlify/functions/vision",{
+      method:"POST",
+      headers:{"Content-Type":"application/json"},
+      body: JSON.stringify({ image: base64Image })
+    });
+    const data = await resp.json();
+    if(data && data.responses && data.responses[0] && data.responses[0].fullTextAnnotation){
+      document.getElementById("texto").value = data.responses[0].fullTextAnnotation.text;
+    } else {
+      // a veces Vision falla y devuelve regions. fallback a JSON completo.
+      console.warn("Vision response:", data);
+      document.getElementById("texto").value = (data.responses && JSON.stringify(data.responses)) || "No se detectó texto claro.";
+    }
+  }catch(err){
+    console.error(err);
+    document.getElementById("texto").value = "Error al llamar a la función OCR: " + (err.message || err);
+  }
 }
 
-// GENERAR TABLA
+function limpiarOCR(){
+  document.getElementById("texto").value = "";
+  document.getElementById("preview").src = "";
+  document.getElementById("preview").style.display = "none";
+  base64Image = "";
+}
+
+/* -------------------------
+   Parsing robusto
+   ------------------------- */
+
+function parseLine(line){
+  // limpia y normaliza
+  if(!line) return null;
+  let raw = line.trim();
+  raw = raw.replace(/×/gi,'x').replace(/X/gi,'x');
+  raw = raw.replace(/=/g,' ').replace(/:/g,' ').replace(/,/g,' ').replace(/\s+/g,' ');
+  // extraer todos los números
+  const nums = raw.match(/\d+/g);
+  if(!nums || nums.length < 2) return null;
+
+  // intentar patrones claros: "count - largo x ancho" o "count largoxancho"
+  // patrón 1: /^\s*(\d+)\s*[-]\s*(\d+)\s*[x*]\s*(\d+)/
+  const p1 = raw.match(/^\s*(\d+)\s*[-]\s*(\d+)\s*[x*]\s*(\d+)/i);
+  if(p1){
+    return { count: parseInt(p1[1],10), largo: parseInt(p1[2],10), ancho: parseInt(p1[3],10) };
+  }
+  // patrón 2: "^\s*(\d+)\s+(\d+)[x*](\d+)"  (ej: "2 250x280")
+  const p2 = raw.match(/^\s*(\d+)\s+(\d+)\s*[x*]\s*(\d+)/i);
+  if(p2){
+    return { count: parseInt(p2[1],10), largo: parseInt(p2[2],10), ancho: parseInt(p2[3],10) };
+  }
+  // patrón 3: "(\d+)[x*](\d+)"  (ej: "142 x228")
+  const p3 = raw.match(/(\d+)\s*[x*]\s*(\d+)/i);
+  if(p3){
+    // si hay 3 o más números, interpretamos [count,largo,ancho], sino count=1
+    if(nums.length>=3){
+      return { count: parseInt(nums[0],10), largo: parseInt(nums[1],10), ancho: parseInt(nums[2],10) };
+    } else {
+      return { count:1, largo: parseInt(p3[1],10), ancho: parseInt(p3[2],10) };
+    }
+  }
+  // fallback general: si tenemos >=3 números asumimos [count,largo,ancho]
+  if(nums.length>=3){
+    return { count: parseInt(nums[0],10), largo: parseInt(nums[1],10), ancho: parseInt(nums[2],10) };
+  }
+  // si tenemos exactamente 2 números: largo y ancho
+  if(nums.length===2){
+    return { count:1, largo: parseInt(nums[0],10), ancho: parseInt(nums[1],10) };
+  }
+  return null;
+}
+
+/* -------------------------
+   Generar tabla (UI)
+   ------------------------- */
+
 function generarTabla(){
+  const texto = document.getElementById("texto").value || "";
+  const precio = safeParsePrice(document.getElementById("precio").value);
+  const altura = parseFloat(document.getElementById("altura").value) || 0;
+  const ivaPorc = parseFloat(document.getElementById("iva").value) || 0;
 
-const texto = document.getElementById("texto").value;
-const precio = parseFloat(document.getElementById("precio").value.replace(/\./g,""));
-const altura = parseFloat(document.getElementById("altura").value);
-const ivaPorc = parseFloat(document.getElementById("iva").value);
+  const lines = texto.split(/\r?\n/).map(l=>l.trim()).filter(Boolean);
+  const tbody = document.getElementById("tablaBody");
+  tbody.innerHTML = "";
 
-const lineas = texto.split("\n");
-const tbody = document.getElementById("tablaBody");
-tbody.innerHTML="";
+  let subtotal = 0;
+  for(const ln of lines){
+    const parsed = parseLine(ln);
+    if(!parsed) continue;
+    const c = isNaN(parsed.count)?1:parsed.count;
+    const largo = parsed.largo || 0;
+    const ancho = parsed.ancho || 0;
+    // m3:
+    const m3 = (largo/100)*(ancho/100)*(altura/100)*c;
+    const totalLinea = m3 * precio;
+    subtotal += totalLinea;
 
-let subtotal=0;
+    const tr = document.createElement("tr");
+    tr.innerHTML = `<td>${c}</td>
+                    <td>${largo}</td>
+                    <td>${ancho}</td>
+                    <td>${altura}</td>
+                    <td>${m3.toFixed(3)}</td>
+                    <td>$ ${fmt(Math.round(totalLinea))}</td>`;
+    tbody.appendChild(tr);
+  }
 
-lineas.forEach(linea=>{
-if(!linea.trim()) return;
+  const ivaVal = subtotal * (ivaPorc/100);
+  const total = subtotal + ivaVal;
 
-let partes = linea.replace(/x/gi,"*").split("*");
-
-let cant=1,largo=0,ancho=0;
-
-if(linea.includes("-")){
-let temp = linea.split("-");
-cant=parseFloat(temp[0]);
-let dims=temp[1].split("*");
-largo=parseFloat(dims[0]);
-ancho=parseFloat(dims[1]);
-}else{
-largo=parseFloat(partes[0]);
-ancho=parseFloat(partes[1]);
+  document.getElementById("subtotal").innerText = "Subtotal: $ " + fmt(Math.round(subtotal));
+  document.getElementById("ivaValor").innerText = "IVA: $ " + fmt(Math.round(ivaVal));
+  document.getElementById("totalFinal").innerText = "Total: $ " + fmt(Math.round(total));
 }
 
-if(isNaN(largo)||isNaN(ancho)) return;
+/* -------------------------
+   Generar PDF (con logo y tabla)
+   ------------------------- */
+async function generarPDF(){
+  // tomar datos
+  const cliente = document.getElementById("cliente").value || "Cliente";
+  const precio = safeParsePrice(document.getElementById("precio").value);
+  const altura = parseFloat(document.getElementById("altura").value) || 0;
+  const ivaPorc = parseFloat(document.getElementById("iva").value) || 0;
 
-let m3 = (largo/100)*(ancho/100)*(altura/100)*cant;
-let totalLinea = m3 * precio;
-subtotal+=totalLinea;
+  // refrescar tabla en caso de que hayan cambiado cosas
+  generarTabla();
 
-tbody.innerHTML+=`
-<tr>
-<td>${cant}</td>
-<td>${largo}</td>
-<td>${ancho}</td>
-<td>${altura}</td>
-<td>${m3.toFixed(3)}</td>
-<td>$ ${formato(Math.round(totalLinea))}</td>
-</tr>
-`;
+  // leer tabla rows
+  const rows = [];
+  const trs = document.querySelectorAll("#tablaBody tr");
+  trs.forEach(tr=>{
+    const tds = tr.querySelectorAll("td");
+    if(tds.length>=6){
+      rows.push([
+        tds[0].innerText,
+        tds[1].innerText,
+        tds[2].innerText,
+        tds[3].innerText,
+        tds[4].innerText,
+        tds[5].innerText.replace(/\$/g,'').trim()
+      ]);
+    }
+  });
 
-});
+  // calcular valores finales
+  const subtotalText = document.getElementById("subtotal").innerText.split("$")[1].replace(/\./g,"");
+  const ivaText = document.getElementById("ivaValor").innerText.split("$")[1].replace(/\./g,"");
+  const totalText = document.getElementById("totalFinal").innerText.split("$")[1].replace(/\./g,"");
 
-let ivaValor = subtotal * (ivaPorc/100);
-let totalFinal = subtotal + ivaValor;
+  // preparar jsPDF
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({unit:'pt',format:'a4'});
 
-document.getElementById("subtotal").innerText="Subtotal: $ "+formato(Math.round(subtotal));
-document.getElementById("ivaValor").innerText="IVA: $ "+formato(Math.round(ivaValor));
-document.getElementById("totalFinal").innerText="Total: $ "+formato(Math.round(totalFinal));
-}
+  // header
+  doc.setFontSize(16);
+  doc.text("COTIZACIÓN ICOPOR", 40, 50);
 
-// PDF
-function generarPDF(){
+  // logo si existe
+  if(base64Logo){
+    try{
+      // intentar agregar como JPEG, si falla probar PNG (no aplicamos auto-detect)
+      doc.addImage(base64Logo, 'JPEG', 420, 30, 120, 60);
+    }catch(e){
+      try{ doc.addImage(base64Logo,'PNG',420,30,120,60); }catch(e2){ console.warn("no se pudo insertar logo:", e2); }
+    }
+  }
 
-const { jsPDF } = window.jspdf;
-const doc = new jsPDF();
+  // datos cliente y meta
+  doc.setFontSize(11);
+  doc.text(`Cliente: ${cliente}`, 40, 90);
+  doc.text(`N° Cotización: ${String(cotNumero).padStart(3,'0')}`, 40, 110);
+  doc.text(`Fecha: ${new Date().toLocaleString()}`, 40, 130);
 
-const cliente = document.getElementById("cliente").value || "Cliente";
-const total = document.getElementById("totalFinal").innerText;
+  // tabla con autotable
+  doc.autoTable({
+    startY: 160,
+    head: [['Cant','Largo (cm)','Ancho (cm)','Altura (cm)','m³','Total Línea (COP)']],
+    body: rows,
+    styles:{fontSize:10},
+    headStyles:{fillColor:[240,240,240]}
+  });
 
-doc.setFontSize(16);
-doc.text("COTIZACIÓN ICOPOR",20,20);
+  // totales al final de la página
+  const finalY = doc.lastAutoTable ? doc.lastAutoTable.finalY + 10 : 300;
+  doc.text(`Subtotal: $ ${fmt(parseInt(subtotalText||0,10))}`, 400, finalY + 20);
+  doc.text(`IVA (${ivaPorc}%): $ ${fmt(parseInt(ivaText||0,10))}`, 400, finalY + 40);
+  doc.setFontSize(12);
+  doc.text(`Total: $ ${fmt(parseInt(totalText||0,10))}`, 400, finalY + 65);
 
-doc.setFontSize(12);
-doc.text("Cliente: "+cliente,20,35);
-doc.text(document.getElementById("numeroCotizacion").innerText,20,45);
+  // meta info (tu empresa)
+  doc.setFontSize(9);
+  doc.text("ICOPOR DE ORIENTE — Contacto: ejemplo@email.com — Tel: +57 300 0000000", 40, finalY + 95);
 
-doc.text(total,20,60);
+  // guardar PDF
+  const filename = `COT-${String(cotNumero).padStart(3,'0')} - ${cliente}.pdf`;
+  doc.save(filename);
 
-let nombreArchivo =
-"COT-"+String(numero).padStart(3,"0")+" - "+cliente+".pdf";
-
-doc.save(nombreArchivo);
-
-numero++;
-localStorage.setItem("cotNumero",numero);
-location.reload();
+  // incrementar número
+  cotNumero++;
+  localStorage.setItem("cot_num", String(cotNumero));
+  actualizarNumeroUI();
 }
 
 </script>
-
 </body>
 </html>
