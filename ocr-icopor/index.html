@@ -1,129 +1,459 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>OCR PRO ICOPOR</title>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>OCR → Cotización (ICOPOR)</title>
+
+<!-- html2pdf para exportar PDF (incluye html2canvas + jspdf) -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.9.2/html2pdf.bundle.min.js"></script>
 
 <style>
-body {
-    font-family: Arial, sans-serif;
-    background: #f4f6f9;
-    padding: 40px;
-}
-
-h2 {
-    margin-bottom: 20px;
-}
-
-button {
-    padding: 10px 20px;
-    margin: 5px;
-    border: none;
-    border-radius: 6px;
-    cursor: pointer;
-}
-
-.blue { background: #2563eb; color: white; }
-.red { background: #dc2626; color: white; }
-
-#preview {
-    max-width: 500px;
-    margin-top: 20px;
-    display: block;
-}
-
-textarea {
-    width: 100%;
-    height: 180px;
-    margin-top: 20px;
-    padding: 10px;
-    font-family: monospace;
-}
+  :root{
+    --bg:#f4f6f9; --card:#ffffff; --accent:#2563eb; --muted:#6b7280;
+    --success:#10b981; --danger:#ef4444;
+  }
+  body{font-family:Inter, Arial, sans-serif;background:var(--bg);margin:0;padding:28px;color:#111}
+  .wrap{max-width:1100px;margin:0 auto}
+  header{display:flex;align-items:center;gap:18px}
+  header h1{font-size:20px;margin:0}
+  .row{display:flex;gap:18px;margin-top:18px;flex-wrap:wrap}
+  .card{background:var(--card);padding:16px;border-radius:8px;box-shadow:0 6px 18px rgba(16,24,40,0.04)}
+  .left{flex:1 1 420px}
+  .right{flex:1 1 420px}
+  input[type=file]{display:block}
+  button{background:var(--accent);color:#fff;border:0;padding:8px 12px;border-radius:6px;cursor:pointer}
+  .btn-red{background:var(--danger)}
+  .btn-outline{background:transparent;border:1px solid #e5e7eb;color:#111}
+  textarea{width:100%;height:150px;font-family:monospace;padding:8px;border-radius:6px;border:1px solid #e5e7eb}
+  #preview{max-width:100%;border-radius:6px;margin-top:8px;border:1px dashed #e5e7eb}
+  label{font-weight:600;color:var(--muted);font-size:13px}
+  .controls{display:flex;gap:8px;align-items:center;margin-top:12px;flex-wrap:wrap}
+  .small{font-size:13px;color:var(--muted)}
+  .input-inline{padding:8px;border-radius:6px;border:1px solid #e5e7eb}
+  #tabla{margin-top:14px}
+  table{width:100%;border-collapse:collapse;font-size:14px}
+  table th, table td{border:1px solid #e5e7eb;padding:8px;text-align:center}
+  .quote-card{padding:12px;border-radius:8px;background:#fff}
+  .logo-preview{max-height:60px}
+  .meta-row{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-top:8px}
+  .muted{color:var(--muted);font-size:13px}
+  .footer-note{font-size:12px;color:var(--muted);margin-top:8px}
 </style>
 </head>
-
 <body>
+<div class="wrap">
 
-<h2>OCR PRO ICOPOR (Google Vision)</h2>
+  <header>
+    <h1>OCR PRO — Generador de Cotizaciones</h1>
+    <div class="small muted">Local · Gratis · Escalable</div>
+  </header>
 
-<input type="file" id="imageInput" accept="image/*">
-<button class="blue" onclick="procesar()">Leer con IA</button>
-<button class="red" onclick="limpiar()">Limpiar</button>
+  <div class="row">
+    <div class="card left">
+      <label>1) Selecciona la imagen (foto o escaneo)</label>
+      <input type="file" id="imageInput" accept="image/*">
 
-<img id="preview">
+      <div class="controls">
+        <button id="btnLeer">Leer imagen (Vision)</button>
+        <button id="btnLimpiar" class="btn-red">Limpiar</button>
+        <button id="btnPreprocesar" class="btn-outline">Mejorar (B/N)</button>
+      </div>
 
-<textarea id="resultado" placeholder="Aquí aparecerá el texto detectado por la IA..."></textarea>
+      <img id="preview" alt="Preview">
+
+      <label style="margin-top:10px">Texto detectado:</label>
+      <textarea id="resultado" placeholder="Aquí aparecerá el texto..."></textarea>
+
+      <div class="footer-note">Si alguna línea sale mal, edítala directamente en el textarea antes de generar la cotización.</div>
+    </div>
+
+    <div class="card right">
+      <label>2) Datos de la cotización</label>
+
+      <div style="display:flex;gap:8px;margin-top:8px">
+        <input id="cliente" class="input-inline" placeholder="Nombre del cliente (ej: Pepito Perez)" style="flex:1">
+        <input id="precioMetro" class="input-inline" placeholder="Precio por m²" type="number" step="any" style="width:160px">
+      </div>
+
+      <div style="display:flex;gap:8px;margin-top:10px;align-items:center">
+        <label style="min-width:110px">Logo (opcional)</label>
+        <input type="file" id="logoInput" accept="image/*">
+      </div>
+
+      <div class="meta-row">
+        <div>
+          <div class="muted">Fecha</div>
+          <div id="fechaDisplay"></div>
+        </div>
+
+        <div>
+          <div class="muted">Último N° Cotización</div>
+          <div id="lastNumero">—</div>
+        </div>
+      </div>
+
+      <div style="margin-top:12px">
+        <button id="btnGenerar" style="width:48%">Generar Cotización (ver tabla)</button>
+        <button id="btnPDF" style="width:48%">Generar PDF</button>
+      </div>
+
+      <div id="tabla" style="margin-top:14px"></div>
+
+      <div class="footer-note" style="margin-top:12px">
+        Nota: el número de cotización se guarda localmente en este navegador (localStorage). Si quieres reiniciarlo, <button id="resetNum" class="btn-outline">Reset N°</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Elemento oculto que usaremos para construir el PDF (se rellena dinámicamente) -->
+  <div id="pdfContentWrapper" style="display:none"></div>
+</div>
 
 <script>
+/* -----------------------
+  Config / helpers
+   - Reemplaza endpoint si tu función está en otra ruta
+   - Si prefieres un logo estático, coloca logo.png en la misma carpeta
+     y descomenta la línea definida en usarLogoEstatico
+-------------------------*/
+const VISION_ENDPOINT = '/.netlify/functions/vision'; // deja como está si funciona
+let base64Image = '';
+let logoDataUrl = ''; // se rellena si subes logo
+const usarLogoEstatico = false; // si quieres usar un logo estático en logo.png pon true
 
-let base64Image = "";
+// DOM
+const imageInput = document.getElementById('imageInput');
+const preview = document.getElementById('preview');
+const resultado = document.getElementById('resultado');
+const btnLeer = document.getElementById('btnLeer');
+const btnLimpiar = document.getElementById('btnLimpiar');
+const btnPreprocesar = document.getElementById('btnPreprocesar');
+const precioMetro = document.getElementById('precioMetro');
+const cliente = document.getElementById('cliente');
+const logoInput = document.getElementById('logoInput');
+const fechaDisplay = document.getElementById('fechaDisplay');
+const btnGenerar = document.getElementById('btnGenerar');
+const btnPDF = document.getElementById('btnPDF');
+const tablaDiv = document.getElementById('tabla');
+const lastNumeroDiv = document.getElementById('lastNumero');
+const resetNumBtn = document.getElementById('resetNum');
 
-// Cuando el usuario selecciona imagen
-document.getElementById("imageInput").addEventListener("change", function(e) {
+function setFechaHoy(){
+  const d = new Date();
+  fechaDisplay.textContent = d.toLocaleString();
+}
+setFechaHoy();
 
-    const file = e.target.files[0];
-    if(!file) return;
+// muestra último número guardado
+function actualizarUltimoNumeroUI(){
+  const last = localStorage.getItem('cot_last_number') || '0';
+  lastNumeroDiv.textContent = last.padStart ? String(last).padStart(3,'0') : last;
+}
+actualizarUltimoNumeroUI();
 
-    const reader = new FileReader();
-
-    reader.onload = function() {
-        document.getElementById("preview").src = reader.result;
-
-        // Quitamos encabezado data:image/...;
-        base64Image = reader.result.split(",")[1];
-    };
-
-    reader.readAsDataURL(file);
+// Image -> preview + base64
+imageInput.addEventListener('change', e=>{
+  const file = e.target.files[0];
+  if(!file) return;
+  const r = new FileReader();
+  r.onload = () => {
+    preview.src = r.result;
+    base64Image = r.result.split(',')[1];
+  };
+  r.readAsDataURL(file);
 });
 
+// logo upload
+logoInput.addEventListener('change', e=>{
+  const f = e.target.files[0];
+  if(!f) { logoDataUrl = ''; return; }
+  const r = new FileReader();
+  r.onload = () => { logoDataUrl = r.result; };
+  r.readAsDataURL(f);
+});
 
-// Enviar imagen a Netlify Function
-async function procesar() {
+// limpiar
+btnLimpiar.addEventListener('click', ()=>{
+  preview.src = '';
+  resultado.value = '';
+  imageInput.value = '';
+  base64Image = '';
+});
 
-    if(!base64Image){
-        alert("Primero debes subir una imagen.");
-        return;
+// preprocesado visual simple (convierte preview a B/N usando canvas)
+btnPreprocesar.addEventListener('click', ()=>{
+  if(!preview.src) return alert('Sube una imagen primero.');
+  const img = new Image();
+  img.crossOrigin = "Anonymous";
+  img.src = preview.src;
+  img.onload = ()=>{
+    const canvas = document.createElement('canvas');
+    canvas.width = img.naturalWidth;
+    canvas.height = img.naturalHeight;
+    const ctx = canvas.getContext('2d');
+    ctx.drawImage(img,0,0);
+    const imgd = ctx.getImageData(0,0,canvas.width,canvas.height);
+    for(let i=0;i<imgd.data.length;i+=4){
+      const r=imgd.data[i], g=imgd.data[i+1], b=imgd.data[i+2];
+      const v = 0.299*r+0.587*g+0.114*b;
+      const c = v>150?255:0; // threshold
+      imgd.data[i]=imgd.data[i+1]=imgd.data[i+2]=c;
     }
+    ctx.putImageData(imgd,0,0);
+    const dataUrl = canvas.toDataURL('image/jpeg',0.9);
+    preview.src = dataUrl;
+    base64Image = dataUrl.split(',')[1];
+  };
+});
 
-    document.getElementById("resultado").value = "Procesando con Google Vision...";
-
-    try {
-
-        const response = await fetch("/.netlify/functions/vision", {
-            method: "POST",
-            headers: {
-                "Content-Type": "application/json"
-            },
-            body: JSON.stringify({ image: base64Image })
-        });
-
-        const data = await response.json();
-
-        if(data.responses && data.responses[0].fullTextAnnotation){
-            document.getElementById("resultado").value =
-                data.responses[0].fullTextAnnotation.text;
-        } else {
-            document.getElementById("resultado").value = "No se detectó texto.";
-        }
-
-    } catch(error) {
-        document.getElementById("resultado").value = "Error: " + error.message;
+// -------- OCR -> llama función Netlify (Google Vision) ----------
+btnLeer.addEventListener('click', async ()=>{
+  if(!base64Image) return alert('Sube una imagen primero.');
+  resultado.value = 'Procesando con Google Vision...';
+  try{
+    const res = await fetch(VISION_ENDPOINT, {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ image: base64Image })
+    });
+    // puede que la función retorne no-JSON si falla; por eso manejamos con try/catch
+    const data = await res.json();
+    if(data && data.responses && data.responses[0] && data.responses[0].fullTextAnnotation){
+      resultado.value = data.responses[0].fullTextAnnotation.text.trim();
+    } else {
+      // si no hay fullTextAnnotation, intentar texto detectado simple
+      let txt = '';
+      if(data && data.responses && data.responses[0] && data.responses[0].textAnnotations && data.responses[0].textAnnotations[0]){
+        txt = data.responses[0].textAnnotations[0].description || '';
+      }
+      resultado.value = txt || 'No se detectó texto o respuesta inesperada.';
     }
+  } catch(err){
+    resultado.value = 'Error al llamar Vision: ' + (err.message || err);
+  }
+});
+
+/* -----------------------
+  Parseo de líneas y generación de tabla
+  Soporta patrones:
+    1-250x280
+    1 - 250 x 280
+    1 = 250 * 280
+    también acepta decimales con coma o punto
+  Si falta cantidad usa 1 por defecto
+-------------------------*/
+function parseLine(line){
+  // quitar espacios extra
+  const s = line.trim();
+  if(!s) return null;
+  // regex: optional quantity at start
+  // ejemplos:
+  // 2-250*280
+  // 3 - 150 x 370
+  // 250 x 280
+  const regex = /^\s*(?:(\d+)\s*[-:=]\s*)?(\d+(?:[.,]\d+)?)\s*[x\*]\s*(\d+(?:[.,]\d+)?)/i;
+  // also accept quantity separated with space: "2  -  250x280" covered
+  // if pattern not matched and line begins with digits: try alternative with leading quantity like "2 250 x 280"
+  const match = s.match(regex);
+  if(match){
+    let cantidad = match[1] ? parseInt(match[1],10) : 1;
+    let ancho = parseFloat(String(match[2]).replace(',','.'));
+    let alto  = parseFloat(String(match[3]).replace(',','.'));
+    return {cantidad, ancho, alto};
+  }
+  // try pattern with explicit leading qty and dash missing: e.g. "2 250x280"
+  const alt = s.match(/^\s*(\d+)\s+(\d+(?:[.,]\d+)?)\s*[x\*]\s*(\d+(?:[.,]\d+)?)/i);
+  if(alt){
+    return {cantidad: parseInt(alt[1],10), ancho: parseFloat(String(alt[2]).replace(',','.')), alto: parseFloat(String(alt[3]).replace(',','.'))};
+  }
+  return null;
 }
 
+function generarTablaDesdeTexto(){
+  const txt = resultado.value.trim();
+  if(!txt) return alert('No hay texto para parsear. Haz OCR o pega las líneas manualmente.');
+  const lines = txt.split(/\r?\n/).map(l=>l.trim()).filter(l=>l.length>0);
+  if(lines.length===0) return alert('No se encontraron líneas válidas.');
 
-// Limpiar pantalla
-function limpiar(){
-    document.getElementById("resultado").value = "";
-    document.getElementById("preview").src = "";
-    document.getElementById("imageInput").value = "";
-    base64Image = "";
-    
+  const precio = parseFloat(precioMetro.value);
+  if(isNaN(precio)) { if(!confirm('No has puesto precio por m². Continuar sin precio?')) return; }
+
+  let html = `<div class="quote-card card"><div style="display:flex;justify-content:space-between;align-items:center">`;
+  // logo preview en la tarjeta
+  html += `<div style="display:flex;align-items:center;gap:12px">`;
+  if(logoDataUrl){
+    html += `<img src="${logoDataUrl}" class="logo-preview" alt="logo">`;
+  } else if(usarLogoEstatico){
+    html += `<img src="logo.png" class="logo-preview" alt="logo">`;
+  } else {
+    html += `<div style="width:100px;height:40px;border-radius:6px;background:#f3f4f6;display:flex;align-items:center;justify-content:center;color:${getComputedStyle(document.documentElement).getPropertyValue('--muted')}">LOGO</div>`;
+  }
+  html += `</div>`;
+
+  // cliente / fecha
+  html += `<div style="text-align:right">`;
+  html += `<div style="font-weight:700">${ (cliente.value||'Sin cliente').toUpperCase() }</div>`;
+  html += `<div class="muted">${ new Date().toLocaleString() }</div>`;
+  html += `</div></div>`;
+
+  html += `<table style="margin-top:12px"><thead><tr><th>Cant</th><th>Ancho</th><th>Alto</th><th>Unidad</th><th>m² (cada)</th><th>Total línea</th></tr></thead><tbody>`;
+
+  let totalGeneral = 0;
+  for(const line of lines){
+    const p = parseLine(line);
+    if(!p){
+      // si no se parsea, la incluimos como línea ignorada
+      html += `<tr><td colspan="6" style="text-align:left;color:#9ca3af;padding:10px">No parseable: ${escapeHtml(line)}</td></tr>`;
+      continue;
+    }
+
+    // asumo milímetros en imagenes (mm). Convertir mm -> m: /1000
+    const ancho_m = (p.ancho)/1000;
+    const alto_m = (p.alto)/1000;
+    const m2_unidad = ancho_m * alto_m;
+    const metros = m2_unidad * p.cantidad;
+    const totalLinea = (isNaN(precio) ? 0 : metros * precio);
+
+    totalGeneral += totalLinea;
+
+    html += `<tr>
+      <td>${p.cantidad}</td>
+      <td>${p.ancho}</td>
+      <td>${p.alto}</td>
+      <td>mm</td>
+      <td>${m2_unidad.toFixed(3)}</td>
+      <td>$${totalLinea.toFixed(2)}</td>
+    </tr>`;
+  }
+
+  html += `</tbody><tfoot><tr><td colspan="5" style="text-align:right;font-weight:700">TOTAL</td><td style="font-weight:700">$${totalGeneral.toFixed(2)}</td></tr></tfoot></table></div>`;
+
+  tablaDiv.innerHTML = html;
 }
 
+// escape simple para texto en tabla
+function escapeHtml(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+// Botón generar tabla
+btnGenerar.addEventListener('click', generarTablaDesdeTexto);
+
+// Reset número cotización
+resetNumBtn.addEventListener('click', ()=>{
+  if(confirm('Reiniciar contador de cotizaciones a 0?')) {
+    localStorage.setItem('cot_last_number','0');
+    actualizarUltimoNumeroUI();
+  }
+});
+
+/* -------------------------
+  Generar PDF
+  - incrementa número guardado en localStorage
+  - crea un contenedor bonito y lo convierte a pdf con html2pdf
+  - nombra archivo: cot 001 - <cliente>.pdf
+--------------------------*/
+async function generarPDF(){
+  const clienteName = (cliente.value || 'sin cliente').trim();
+  if(!clienteName) {
+    if(!confirm('No ingresaste nombre del cliente. Continuar con "sin cliente"?')) return;
+  }
+  // si no hay tabla generada, genera antes
+  if(!tablaDiv.innerHTML || tablaDiv.innerHTML.trim()==='') generarTablaDesdeTexto();
+
+  // arma el contenido para PDF (puede contener logo)
+  const wrapper = document.createElement('div');
+  wrapper.style.fontFamily = 'Arial, sans-serif';
+  wrapper.style.padding = '18px';
+  wrapper.style.background = '#fff';
+  wrapper.style.color = '#111';
+  wrapper.style.width = '800px';
+
+  // Cabecera: logo + datos
+  const cab = document.createElement('div');
+  cab.style.display = 'flex';
+  cab.style.justifyContent = 'space-between';
+  cab.style.alignItems = 'center';
+  cab.style.marginBottom = '12px';
+
+  const left = document.createElement('div');
+  if(logoDataUrl){
+    const i = document.createElement('img'); i.src = logoDataUrl; i.style.maxHeight='60px';
+    left.appendChild(i);
+  } else if (usarLogoEstatico) {
+    const i = document.createElement('img'); i.src = 'logo.png'; i.style.maxHeight='60px';
+    left.appendChild(i);
+  } else {
+    const ph = document.createElement('div'); ph.textContent='LOGO'; ph.style.background='#f3f4f6'; ph.style.padding='10px 18px'; ph.style.borderRadius='6px';
+    left.appendChild(ph);
+  }
+  const right = document.createElement('div');
+  right.innerHTML = `<div style="font-weight:700">${escapeHtml(clienteName)}</div><div style="color:#6b7280">${new Date().toLocaleString()}</div>`;
+  cab.appendChild(left); cab.appendChild(right);
+  wrapper.appendChild(cab);
+
+  // tabla: clonamos la tabla que mostramos en pantalla (si existe)
+  const tablaClon = tablaDiv.cloneNode(true);
+  // quitamos botones/otros si existen
+  const tables = tablaClon.querySelectorAll('button');
+  tables.forEach(b=>b.remove());
+  wrapper.appendChild(tablaClon);
+
+  // número de cotización autoincremental
+  let last = parseInt(localStorage.getItem('cot_last_number') || '0',10);
+  last = last + 1;
+  localStorage.setItem('cot_last_number', String(last));
+  actualizarUltimoNumeroUI();
+
+  const numeroStr = String(last).padStart(3,'0');
+  const safeName = clienteName.replace(/[^a-z0-9áéíóúñ_\- ]/gi,'').replace(/\s+/g,' ');
+  const filename = `cot ${numeroStr} - ${safeName}.pdf`;
+
+  // añadimos pie con numero
+  const pie = document.createElement('div');
+  pie.style.marginTop='12px';
+  pie.style.fontSize='12px';
+  pie.style.color='#6b7280';
+  pie.innerHTML = `<div>N° Cotización: ${numeroStr}</div><div style="margin-top:4px">Generado: ${new Date().toLocaleString()}</div>`;
+  wrapper.appendChild(pie);
+
+  // usamos html2pdf
+  const opt = {
+    margin:       10,
+    filename:     filename,
+    image:        { type: 'jpeg', quality: 0.98 },
+    html2canvas:  { scale: 2, logging:false, useCORS: true },
+    jsPDF:        { unit: 'pt', format: 'a4', orientation: 'portrait' }
+  };
+
+  // mostrar mensaje / bloquear boton
+  btnPDF.disabled = true;
+  btnPDF.textContent = 'Generando PDF...';
+
+  try {
+    await html2pdf().set(opt).from(wrapper).save();
+  } catch(err){
+    alert('Error al generar PDF: ' + (err.message || err));
+  } finally {
+    btnPDF.disabled = false;
+    btnPDF.textContent = 'Generar PDF';
+  }
+}
+
+btnPDF.addEventListener('click', generarPDF);
+
+/* -----------------------
+  Al cargar: si usar logo estático, intentar cargar logo.png en preview
+------------------------*/
+if(usarLogoEstatico){
+  // intenta cargar logo.png
+  fetch('logo.png').then(r=>{
+    if(r.ok) return r.blob();
+    throw new Error('no logo');
+  }).then(b=>{
+    const url = URL.createObjectURL(b);
+    logoDataUrl = url;
+  }).catch(()=>{ /* no pasa nada */ });
+}
 </script>
-
 </body>
 </html>
-
