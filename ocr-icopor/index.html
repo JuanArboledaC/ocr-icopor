@@ -5,356 +5,246 @@
 <meta name="viewport" content="width=device-width,initial-scale=1" />
 <title>ICOPOR — Cotizador m³ (OCR + PDF)</title>
 
-<!-- jsPDF + AutoTable -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.25/jspdf.plugin.autotable.min.js"></script>
 
 <style>
-  body{font-family:Arial,Helvetica,sans-serif;background:#f3f4f6;margin:24px;}
-  h1{margin:0 0 18px 0}
-  .row{display:flex;gap:20px;flex-wrap:wrap}
-  .card{background:#fff;padding:18px;border-radius:10px;box-shadow:0 6px 18px rgba(0,0,0,0.06);flex:1;min-width:320px}
-  input, textarea, select {width:100%;padding:8px;margin:8px 0;border:1px solid #ddd;border-radius:6px}
-  textarea{height:160px;font-family:monospace}
-  img#preview{max-width:100%;border-radius:6px;margin-top:8px;display:none}
-  table{width:100%;border-collapse:collapse;margin-top:12px}
-  th,td{border:1px solid #e6e6e6;padding:8px;text-align:center}
-  th{background:#fafafa}
-  .btn{display:inline-block;padding:10px 14px;border-radius:8px;border:none;color:#fff;cursor:pointer;margin-top:6px}
-  .btn-blue{background:#1d4ed8}
-  .btn-green{background:#059669}
-  .btn-red{background:#dc2626}
-  .totals{margin-top:12px;text-align:right}
-  .total-strong{font-weight:700;font-size:18px}
+body{font-family:Arial,Helvetica,sans-serif;background:#f3f4f6;margin:24px;}
+h1{margin:0 0 18px 0}
+.row{display:flex;gap:20px;flex-wrap:wrap}
+.card{background:#fff;padding:18px;border-radius:10px;box-shadow:0 6px 18px rgba(0,0,0,0.06);flex:1;min-width:320px}
+input, textarea {width:100%;padding:8px;margin:8px 0;border:1px solid #ddd;border-radius:6px}
+textarea{height:160px;font-family:monospace}
+img#preview{max-width:100%;border-radius:6px;margin-top:8px;display:none}
+table{width:100%;border-collapse:collapse;margin-top:12px}
+th,td{border:1px solid #e6e6e6;padding:8px;text-align:center}
+th{background:#fafafa}
+.btn{display:inline-block;padding:10px 14px;border-radius:8px;border:none;color:#fff;cursor:pointer;margin-top:6px}
+.btn-blue{background:#1d4ed8}
+.btn-green{background:#059669}
+.btn-red{background:#dc2626}
+.totals{margin-top:12px;text-align:right}
+.total-strong{font-weight:700;font-size:18px}
 </style>
 </head>
+
 <body>
 <h1>ICOPOR — Cotizador m³ (OCR → Cotización PDF)</h1>
 
 <div class="row">
-  <div class="card">
-    <h3>1) Subir imagen y extraer texto (OCR)</h3>
+<div class="card">
+<h3>1) Subir imagen y extraer texto (OCR)</h3>
 
-    <label>Imagen (foto / escaneo)</label>
-    <input type="file" id="imageInput" accept="image/*">
+<input type="file" id="imageInput" accept="image/*">
+<img id="preview">
 
-    <img id="preview" alt="preview">
+<div>
+<button class="btn btn-blue" onclick="leerImagen()">Leer Imagen (Vision)</button>
+<button class="btn btn-red" onclick="limpiarOCR()">Limpiar</button>
+</div>
 
-    <div style="margin-top:8px">
-      <button class="btn btn-blue" onclick="leerImagen()">Leer Imagen (Vision)</button>
-      <button class="btn btn-red" onclick="limpiarOCR()">Limpiar</button>
-    </div>
-
-    <h4>Texto detectado (editable)</h4>
-    <textarea id="texto" placeholder="Ejemplo:
+<textarea id="texto" placeholder="Ejemplo:
 2-250*280
 3-150x370
 1 142*228"></textarea>
 
-    <div>
-      <button class="btn btn-green" onclick="generarTabla()">Generar Tabla</button>
-    </div>
-  </div>
+<button class="btn btn-green" onclick="generarTabla()">Generar Tabla</button>
+</div>
 
-  <div class="card">
-    <h3>2) Datos de la cotización</h3>
+<div class="card">
+<h3>2) Datos de la cotización</h3>
 
-    <label>Cliente</label>
-    <input id="cliente" placeholder="Nombre del cliente">
+<input id="cliente" placeholder="Nombre del cliente">
+<input id="precio" value="300000">
+<input id="altura" type="number" value="30">
+<input id="iva" type="number" value="19">
+<input id="logoInput" type="file" accept="image/*">
 
-    <label>Precio por m³ (COP) — acepta 300000 o 300.000</label>
-    <input id="precio" value="300000">
+<strong id="numeroCot">N° Cotización: 000</strong>
 
-    <label>Altura (cm) — se aplica a todas las líneas</label>
-    <input id="altura" type="number" value="30">
+<table>
+<thead>
+<tr>
+<th>Cant</th><th>Largo (cm)</th><th>Ancho (cm)</th>
+<th>Altura (cm)</th><th>m³</th><th>Total Línea (COP)</th>
+</tr>
+</thead>
+<tbody id="tablaBody"></tbody>
+</table>
 
-    <label>IVA (%)</label>
-    <input id="iva" type="number" value="19">
+<div class="totals">
+<div id="subtotal">Subtotal: $ 0</div>
+<div id="ivaValor">IVA: $ 0</div>
+<div class="total-strong" id="totalFinal">Total: $ 0</div>
+</div>
 
-    <label>Logo (opcional) — se incluye en PDF</label>
-    <input id="logoInput" type="file" accept="image/*">
-
-    <div style="margin-top:12px">
-      <strong id="numeroCot">N° Cotización: 000</strong>
-    </div>
-
-    <h4 style="margin-top:12px">Tabla (generada)</h4>
-    <table>
-      <thead>
-        <tr><th>Cant</th><th>Largo (cm)</th><th>Ancho (cm)</th><th>Altura (cm)</th><th>m³</th><th>Total Línea (COP)</th></tr>
-      </thead>
-      <tbody id="tablaBody"></tbody>
-    </table>
-
-    <div class="totals">
-      <div id="subtotal">Subtotal: $ 0</div>
-      <div id="ivaValor">IVA: $ 0</div>
-      <div class="total-strong" id="totalFinal">Total: $ 0</div>
-    </div>
-
-    <div style="margin-top:12px">
-      <button class="btn btn-blue" onclick="generarPDF()">Generar PDF</button>
-    </div>
-  </div>
+<button class="btn btn-blue" onclick="generarPDF()">Generar PDF</button>
+</div>
 </div>
 
 <script>
-/* -------------------------
-   Variables / helpers
-   ------------------------- */
-let base64Image = "";
-let base64Logo = "";
-let cotNumero = parseInt(localStorage.getItem("cot_num") || "1",10);
-function actualizarNumeroUI(){ document.getElementById("numeroCot").innerText = "N° Cotización: " + String(cotNumero).padStart(3,"0"); }
+
+let base64Image="";
+let base64Logo="";
+let cotNumero=parseInt(localStorage.getItem("cot_num")||"1",10);
+function actualizarNumeroUI(){
+document.getElementById("numeroCot").innerText="N° Cotización: "+String(cotNumero).padStart(3,"0");
+}
 actualizarNumeroUI();
 
-function fmt(n){ // formato moneda COP sin decimales
-  if(isNaN(n)) n=0;
-  return n.toLocaleString('es-CO',{maximumFractionDigits:0});
-}
+function fmt(n){return n.toLocaleString('es-CO',{maximumFractionDigits:0});}
 function safeParsePrice(str){
-  if(typeof str !== "string") str = String(str||"");
-  // quitar puntos, espacios, comas
-  str = str.replace(/\./g,"").replace(/,/g,"").replace(/\s/g,"");
-  const p = parseFloat(str);
-  return isNaN(p)?0:p;
+str=str.replace(/\./g,"").replace(/,/g,"").replace(/\s/g,"");
+return parseFloat(str)||0;
 }
 
-/* -------------------------
-   Preview + logo uploads
-   ------------------------- */
-document.getElementById("imageInput").addEventListener("change", function(e){
-  const f = e.target.files[0];
-  if(!f) return;
-  const r = new FileReader();
-  r.onload = ()=> {
-    const src = r.result;
-    document.getElementById("preview").src = src;
-    document.getElementById("preview").style.display = "block";
-    base64Image = src.split(",")[1];
-  };
-  r.readAsDataURL(f);
-});
-document.getElementById("logoInput").addEventListener("change", function(e){
-  const f = e.target.files[0];
-  if(!f) return;
-  const r = new FileReader();
-  r.onload = ()=> {
-    base64Logo = r.result.split(",")[1]; // mantener sin header
-  };
-  r.readAsDataURL(f);
+document.getElementById("imageInput").addEventListener("change",e=>{
+const f=e.target.files[0];
+if(!f)return;
+const r=new FileReader();
+r.onload=()=>{
+document.getElementById("preview").src=r.result;
+document.getElementById("preview").style.display="block";
+base64Image=r.result.split(",")[1];
+};
+r.readAsDataURL(f);
 });
 
-/* -------------------------
-   OCR fetch (Netlify function)
-   ------------------------- */
+document.getElementById("logoInput").addEventListener("change",e=>{
+const f=e.target.files[0];
+if(!f)return;
+const r=new FileReader();
+r.onload=()=>{base64Logo=r.result.split(",")[1];};
+r.readAsDataURL(f);
+});
+
 async function leerImagen(){
-  if(!base64Image){ alert("Sube una imagen primero."); return; }
-  document.getElementById("texto").value = "Procesando...";
-  try{
-    const resp = await fetch("/.netlify/functions/vision",{
-      method:"POST",
-      headers:{"Content-Type":"application/json"},
-      body: JSON.stringify({ image: base64Image })
-    });
-    const data = await resp.json();
-    if(data && data.responses && data.responses[0] && data.responses[0].fullTextAnnotation){
-      document.getElementById("texto").value = data.responses[0].fullTextAnnotation.text;
-    } else {
-      // a veces Vision falla y devuelve regions. fallback a JSON completo.
-      console.warn("Vision response:", data);
-      document.getElementById("texto").value = (data.responses && JSON.stringify(data.responses)) || "No se detectó texto claro.";
-    }
-  }catch(err){
-    console.error(err);
-    document.getElementById("texto").value = "Error al llamar a la función OCR: " + (err.message || err);
-  }
+if(!base64Image){alert("Sube una imagen primero.");return;}
+document.getElementById("texto").value="Procesando...";
+try{
+const resp=await fetch("/.netlify/functions/vision",{
+method:"POST",
+headers:{"Content-Type":"application/json"},
+body:JSON.stringify({image:base64Image})
+});
+const data=await resp.json();
+if(data.responses && data.responses[0].fullTextAnnotation){
+document.getElementById("texto").value=data.responses[0].fullTextAnnotation.text;
+}
+}catch(err){
+document.getElementById("texto").value="Error OCR";
+}
 }
 
 function limpiarOCR(){
-  document.getElementById("texto").value = "";
-  document.getElementById("preview").src = "";
-  document.getElementById("preview").style.display = "none";
-  base64Image = "";
+document.getElementById("texto").value="";
+document.getElementById("preview").style.display="none";
+base64Image="";
 }
-
-/* -------------------------
-   Parsing robusto
-   ------------------------- */
 
 function parseLine(line){
-  // limpia y normaliza
-  if(!line) return null;
-  let raw = line.trim();
-  raw = raw.replace(/×/gi,'x').replace(/X/gi,'x');
-  raw = raw.replace(/=/g,' ').replace(/:/g,' ').replace(/,/g,' ').replace(/\s+/g,' ');
-  // extraer todos los números
-  const nums = raw.match(/\d+/g);
-  if(!nums || nums.length < 2) return null;
-
-  // intentar patrones claros: "count - largo x ancho" o "count largoxancho"
-  // patrón 1: /^\s*(\d+)\s*[-]\s*(\d+)\s*[x*]\s*(\d+)/
-  const p1 = raw.match(/^\s*(\d+)\s*[-]\s*(\d+)\s*[x*]\s*(\d+)/i);
-  if(p1){
-    return { count: parseInt(p1[1],10), largo: parseInt(p1[2],10), ancho: parseInt(p1[3],10) };
-  }
-  // patrón 2: "^\s*(\d+)\s+(\d+)[x*](\d+)"  (ej: "2 250x280")
-  const p2 = raw.match(/^\s*(\d+)\s+(\d+)\s*[x*]\s*(\d+)/i);
-  if(p2){
-    return { count: parseInt(p2[1],10), largo: parseInt(p2[2],10), ancho: parseInt(p2[3],10) };
-  }
-  // patrón 3: "(\d+)[x*](\d+)"  (ej: "142 x228")
-  const p3 = raw.match(/(\d+)\s*[x*]\s*(\d+)/i);
-  if(p3){
-    // si hay 3 o más números, interpretamos [count,largo,ancho], sino count=1
-    if(nums.length>=3){
-      return { count: parseInt(nums[0],10), largo: parseInt(nums[1],10), ancho: parseInt(nums[2],10) };
-    } else {
-      return { count:1, largo: parseInt(p3[1],10), ancho: parseInt(p3[2],10) };
-    }
-  }
-  // fallback general: si tenemos >=3 números asumimos [count,largo,ancho]
-  if(nums.length>=3){
-    return { count: parseInt(nums[0],10), largo: parseInt(nums[1],10), ancho: parseInt(nums[2],10) };
-  }
-  // si tenemos exactamente 2 números: largo y ancho
-  if(nums.length===2){
-    return { count:1, largo: parseInt(nums[0],10), ancho: parseInt(nums[1],10) };
-  }
-  return null;
+line=line.trim().replace(/×/gi,'x');
+const nums=line.match(/\d+/g);
+if(!nums||nums.length<2)return null;
+if(nums.length===2)return{count:1,largo:+nums[0],ancho:+nums[1]};
+return{count:+nums[0],largo:+nums[1],ancho:+nums[2]};
 }
-
-/* -------------------------
-   Generar tabla (UI)
-   ------------------------- */
 
 function generarTabla(){
-  const texto = document.getElementById("texto").value || "";
-  const precio = safeParsePrice(document.getElementById("precio").value);
-  const altura = parseFloat(document.getElementById("altura").value) || 0;
-  const ivaPorc = parseFloat(document.getElementById("iva").value) || 0;
+const texto=document.getElementById("texto").value;
+const precio=safeParsePrice(document.getElementById("precio").value);
+const altura=parseFloat(document.getElementById("altura").value)||0;
+const ivaPorc=parseFloat(document.getElementById("iva").value)||0;
 
-  const lines = texto.split(/\r?\n/).map(l=>l.trim()).filter(Boolean);
-  const tbody = document.getElementById("tablaBody");
-  tbody.innerHTML = "";
+const lines=texto.split(/\n/);
+const tbody=document.getElementById("tablaBody");
+tbody.innerHTML="";
+let subtotal=0;
 
-  let subtotal = 0;
-  for(const ln of lines){
-    const parsed = parseLine(ln);
-    if(!parsed) continue;
-    const c = isNaN(parsed.count)?1:parsed.count;
-    const largo = parsed.largo || 0;
-    const ancho = parsed.ancho || 0;
-    // m3:
-    const m3 = (largo/100)*(ancho/100)*(altura/100)*c;
-    const totalLinea = m3 * precio;
-    subtotal += totalLinea;
+for(const l of lines){
+const p=parseLine(l);
+if(!p)continue;
+const m3=(p.largo/100)*(p.ancho/100)*(altura/100)*p.count;
+const totalLinea=m3*precio;
+subtotal+=totalLinea;
 
-    const tr = document.createElement("tr");
-    tr.innerHTML = `<td>${c}</td>
-                    <td>${largo}</td>
-                    <td>${ancho}</td>
-                    <td>${altura}</td>
-                    <td>${m3.toFixed(3)}</td>
-                    <td>$ ${fmt(Math.round(totalLinea))}</td>`;
-    tbody.appendChild(tr);
-  }
-
-  const ivaVal = subtotal * (ivaPorc/100);
-  const total = subtotal + ivaVal;
-
-  document.getElementById("subtotal").innerText = "Subtotal: $ " + fmt(Math.round(subtotal));
-  document.getElementById("ivaValor").innerText = "IVA: $ " + fmt(Math.round(ivaVal));
-  document.getElementById("totalFinal").innerText = "Total: $ " + fmt(Math.round(total));
+tbody.innerHTML+=`
+<tr>
+<td>${p.count}</td>
+<td>${p.largo}</td>
+<td>${p.ancho}</td>
+<td>${altura}</td>
+<td>${m3.toFixed(3)}</td>
+<td>$ ${fmt(Math.round(totalLinea))}</td>
+</tr>`;
 }
 
-/* -------------------------
-   Generar PDF (con logo y tabla)
-   ------------------------- */
+const ivaVal=subtotal*(ivaPorc/100);
+const total=subtotal+ivaVal;
+
+document.getElementById("subtotal").innerText="Subtotal: $ "+fmt(Math.round(subtotal));
+document.getElementById("ivaValor").innerText="IVA: $ "+fmt(Math.round(ivaVal));
+document.getElementById("totalFinal").innerText="Total: $ "+fmt(Math.round(total));
+}
+
 async function generarPDF(){
-  // tomar datos
-  const cliente = document.getElementById("cliente").value || "Cliente";
-  const precio = safeParsePrice(document.getElementById("precio").value);
-  const altura = parseFloat(document.getElementById("altura").value) || 0;
-  const ivaPorc = parseFloat(document.getElementById("iva").value) || 0;
 
-  // refrescar tabla en caso de que hayan cambiado cosas
-  generarTabla();
+const cliente=document.getElementById("cliente").value||"Cliente";
+const ivaPorc=parseFloat(document.getElementById("iva").value)||0;
+generarTabla();
 
-  // leer tabla rows
-  const rows = [];
-  const trs = document.querySelectorAll("#tablaBody tr");
-  trs.forEach(tr=>{
-    const tds = tr.querySelectorAll("td");
-    if(tds.length>=6){
-      rows.push([
-        tds[0].innerText,
-        tds[1].innerText,
-        tds[2].innerText,
-        tds[3].innerText,
-        tds[4].innerText,
-        tds[5].innerText.replace(/\$/g,'').trim()
-      ]);
-    }
-  });
+const rows=[];
+document.querySelectorAll("#tablaBody tr").forEach(tr=>{
+const t=tr.querySelectorAll("td");
+rows.push([t[0].innerText,t[1].innerText,t[2].innerText,t[3].innerText,t[4].innerText,t[5].innerText]);
+});
 
-  // calcular valores finales
-  const subtotalText = document.getElementById("subtotal").innerText.split("$")[1].replace(/\./g,"");
-  const ivaText = document.getElementById("ivaValor").innerText.split("$")[1].replace(/\./g,"");
-  const totalText = document.getElementById("totalFinal").innerText.split("$")[1].replace(/\./g,"");
+const {jsPDF}=window.jspdf;
+const doc=new jsPDF({unit:'pt',format:'a4'});
 
-  // preparar jsPDF
-  const { jsPDF } = window.jspdf;
-  const doc = new jsPDF({unit:'pt',format:'a4'});
+doc.setFont("helvetica","bold");
+doc.setFontSize(18);
+doc.setTextColor(0,0,0);
+doc.text("COTIZACIÓN ICOPOR",40,50);
 
-  // header
-  doc.setFontSize(16);
-  doc.text("COTIZACIÓN ICOPOR", 40, 50);
+if(base64Logo){
+doc.addImage("data:image/jpeg;base64,"+base64Logo,'JPEG',400,30,140,70);
+}
 
-  // logo si existe
-  if(base64Logo){
-    try{
-      // intentar agregar como JPEG, si falla probar PNG (no aplicamos auto-detect)
-      doc.addImage(base64Logo, 'JPEG', 420, 30, 120, 60);
-    }catch(e){
-      try{ doc.addImage(base64Logo,'PNG',420,30,120,60); }catch(e2){ console.warn("no se pudo insertar logo:", e2); }
-    }
-  }
+doc.setFont("helvetica","normal");
+doc.setFontSize(11);
+doc.text("ICOPOR DE ORIENTE",40,80);
+doc.text("Correo: arleyy090@gmail.com",40,95);
+doc.text("WhatsApp: 3127512420",40,110);
 
-  // datos cliente y meta
-  doc.setFontSize(11);
-  doc.text(`Cliente: ${cliente}`, 40, 90);
-  doc.text(`N° Cotización: ${String(cotNumero).padStart(3,'0')}`, 40, 110);
-  doc.text(`Fecha: ${new Date().toLocaleString()}`, 40, 130);
+doc.text(`Cliente: ${cliente}`,40,135);
+doc.text(`N° Cotización: ${String(cotNumero).padStart(3,'0')}`,40,150);
+doc.text(`Fecha: ${new Date().toLocaleString()}`,40,165);
 
-  // tabla con autotable
-  doc.autoTable({
-    startY: 160,
-    head: [['Cant','Largo (cm)','Ancho (cm)','Altura (cm)','m³','Total Línea (COP)']],
-    body: rows,
-    styles:{fontSize:10},
-    headStyles:{fillColor:[240,240,240]}
-  });
+doc.autoTable({
+startY:190,
+head:[['Cant','Largo (cm)','Ancho (cm)','Altura (cm)','m³','Total Línea (COP)']],
+body:rows,
+styles:{textColor:[0,0,0]},
+headStyles:{fillColor:[230,230,230],textColor:[0,0,0],fontStyle:'bold'}
+});
 
-  // totales al final de la página
-  const finalY = doc.lastAutoTable ? doc.lastAutoTable.finalY + 10 : 300;
-  doc.text(`Subtotal: $ ${fmt(parseInt(subtotalText||0,10))}`, 400, finalY + 20);
-  doc.text(`IVA (${ivaPorc}%): $ ${fmt(parseInt(ivaText||0,10))}`, 400, finalY + 40);
-  doc.setFontSize(12);
-  doc.text(`Total: $ ${fmt(parseInt(totalText||0,10))}`, 400, finalY + 65);
+const finalY=doc.lastAutoTable.finalY+20;
 
-  // meta info (tu empresa)
-  doc.setFontSize(9);
-  doc.text("ICOPOR DE ORIENTE — Contacto: ejemplo@email.com — Tel: +57 300 0000000", 40, finalY + 95);
+doc.text(document.getElementById("subtotal").innerText,400,finalY);
+doc.text(document.getElementById("ivaValor").innerText,400,finalY+20);
+doc.setFont("helvetica","bold");
+doc.text(document.getElementById("totalFinal").innerText,400,finalY+40);
 
-  // guardar PDF
-  const filename = `COT-${String(cotNumero).padStart(3,'0')} - ${cliente}.pdf`;
-  doc.save(filename);
+doc.setFontSize(9);
+doc.setFont("helvetica","normal");
+doc.text("ICOPOR DE ORIENTE — Correo: arleyy090@gmail.com — WhatsApp: 3127512420",40,finalY+70);
 
-  // incrementar número
-  cotNumero++;
-  localStorage.setItem("cot_num", String(cotNumero));
-  actualizarNumeroUI();
+doc.save(`COT-${String(cotNumero).padStart(3,'0')} - ${cliente}.pdf`);
+
+cotNumero++;
+localStorage.setItem("cot_num",cotNumero);
+actualizarNumeroUI();
 }
 
 </script>
